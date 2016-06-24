@@ -1,4 +1,4 @@
-# XPD-MPIIO-DRIVER-WRAPPER (XMDW)
+# XPD-MPIIO-Driver (XMD)
 This is a PMPI library that allows MPI-IO to utilize in-memory storage of the Kove XPD.
 
 ## Current Status
