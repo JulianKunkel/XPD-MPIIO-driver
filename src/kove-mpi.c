@@ -303,7 +303,7 @@ int MPI_File_write(MPI_File fh, CONST void *buf, int count, MPI_Datatype datatyp
       int size;
       MPI_Type_size(datatype, & size);
 
-      f->offset += size;
+      f->offset += ((MPI_Offset) size)*count;
     }
     return ret;
   }
@@ -330,7 +330,7 @@ int MPI_File_read(MPI_File fh, void *buf, int count, MPI_Datatype datatype, MPI_
       int size;
       MPI_Type_size(datatype, & size);
 
-      f->offset += size;
+      f->offset += ((MPI_Offset) size)*count;
     }
     return MPI_SUCCESS;
   }
