@@ -4,166 +4,36 @@
 
 #include "datatype.h"
 
-//@see https://www.mpi-forum.org/docs/mpi-2.2/mpi22-report/node82.htm
-//TODO: Check MPI-1 compatibility
+// count == number of repeats for the file type
+int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * file_offset, size_t * bytes_to_access, int count, MPI_Datatype file_type, MPI_Type_decode_func func, void * usr_ptr){
+  printf("X offs: %zu toAcc: %zu\n", *file_offset, *bytes_to_access);
 
-static void mpix_decode_primitive(MPI_Datatype typ){
-  #ifdef SMPI_COMBINER_NAMED
-  printType("NAMED(");
-  if(typ == MPI_CHAR){
-    printType("CHAR)");
-    return;
-  }
-  if(typ == MPI_SHORT){
-    printType("SHORT)");
-    return;
-  }
-  if(typ == MPI_INT){
-    printType("INT)");
-    return;
-  }
-  if(typ == MPI_LONG){
-    printType("LONG)");
-    return;
-  }
-  if(typ == MPI_UNSIGNED_CHAR){
-    printType("UNSIGNED_CHAR)");
-    return;
-  }
-  if(typ == MPI_UNSIGNED_SHORT){
-    printType("UNSIGNED_SHORT)");
-    return;
-  }
-  if(typ == MPI_UNSIGNED){
-    printType("UNSIGNED)");
-    return;
-  }
-  if(typ == MPI_UNSIGNED_LONG){
-    printType("UNSIGNED_LONG)");
-    return;
-  }
-  if(typ == MPI_FLOAT){
-    printType("FLOAT)");
-    return;
-  }
-  if(typ == MPI_DOUBLE){
-    printType("DOUBLE)");
-    return;
-  }
-  if(typ == MPI_LONG_DOUBLE){
-    printType("LONG_DOUBLE)");
-    return;
-  }
-  if(typ == MPI_BYTE){
-    printType("BYTE)");
-    return;
-  }
-  if(typ == MPI_PACKED){
-    printType("PACKED)");
-    return;
-  }
-  if(typ == MPI_INTEGER){
-    printType("INTEGER)");
-    return;
-  }
-  if(typ == MPI_REAL){
-    printType("REAL)");
-    return;
-  }
-  if(typ == MPI_DOUBLE_PRECISION){
-    printType("DOUBLE_PRECISION)");
-    return;
-  }
-  if(typ == MPI_COMPLEX){
-    printType("COMPLEX)");
-    return;
-  }
-  if(typ == MPI_LOGICAL){
-    printType("LOGICAL)");
-    return;
-  }
-  if(typ == MPI_CHARACTER){
-    printType("CHARACTER)");
-    return;
-  }
-  if(typ == MPI_BYTE){
-    printType("BYTE)");
-    return;
-  }
-  if(typ == MPI_PACKED){
-    printType("PACKED)");
-    return;
-  }
-  #ifdef SMPI_INTEGER1
-  if(typ == MPI_INTEGER1){
-    printType("INTEGER1)");
-    return;
-  }
-  #endif
-  #ifdef SMPI_INTEGER2
-  if(typ == MPI_INTEGER2){
-    printType("INTEGER2)");
-    return;
-  }
-  #endif
-  #ifdef SMPI_INTEGER4
-  if(typ == MPI_INTEGER4){
-    printType("INTEGER4)");
-    return;
-  }
-  #endif
-  #ifdef SMPI_REAL2
-  if(typ == MPI_REAL2){
-    printType("REAL2)");
-    return;
-  }
-  #endif
-  #ifdef SMPI_REAL4
-  if(typ == MPI_REAL4){
-    printType("REAL4)");
-    return;
-  }
-  #endif
-  #ifdef SMPI_REAL8
-  if(typ == MPI_REAL8){
-    printType("REAL8)");
-    return;
-  }
-  #endif
-  #ifdef SMPI_LONG_LONG_INT
-  if(typ == MPI_LONG_LONG_INT){
-    printType("LONG_LONG_INT)");
-    return;
-  }
-  #endif
-  printf("Error: unsupported basic data type\n");
-  #endif
-}
-
-void mpix_decode_datatype(MPI_Datatype typ){
+  size_t processed;
   int ret;
   int num_integers, num_addresses, num_datatypes, combiner;
-  ret = MPI_Type_get_envelope(typ, & num_integers, & num_addresses, & num_datatypes, & combiner);
+  ret = MPI_Type_get_envelope(file_type, & num_integers, & num_addresses, & num_datatypes, & combiner);
   CHECK_RET(ret)
   debug("%d %d %d %d", num_integers, num_addresses, num_datatypes, combiner);
 
   if( combiner == MPI_COMBINER_NAMED ){
-    mpix_decode_primitive(typ);
-    return;
+    int typ_size = 0;
+    MPI_Type_size(file_type, & typ_size);
+    if(typ_size == 0) return 0;
+
+    size_t bytes = ((size_t) typ_size)*count;
+    if (*bytes_to_access < bytes) bytes = *bytes_to_access;
+    processed = func(usr_ptr, bytes, mem_buff, *file_offset);
+    *file_offset += processed;
+    *bytes_to_access -= processed;
+    return processed != bytes;
   }
 
   int integers[num_integers];
   MPI_Aint addresses[num_addresses];
   MPI_Datatype datatypes[num_datatypes];
 
-  ret = MPI_Type_get_contents(typ, num_integers, num_addresses, num_datatypes, integers, addresses, datatypes);
+  ret = MPI_Type_get_contents(file_type, num_integers, num_addresses, num_datatypes, integers, addresses, datatypes);
   CHECK_RET(ret)
-  for(int i=0; i < num_integers; i++){
-    debug("Count: %d", integers[i]);
-  }
-  for(int i=0; i < num_addresses; i++){
-    debug("Address: %zu", (size_t) addresses[i]);
-  }
 
   switch(combiner){
   #ifdef SMPI_COMBINER_DUP
@@ -176,18 +46,22 @@ void mpix_decode_datatype(MPI_Datatype typ){
   #endif
   #ifdef SMPI_COMBINER_CONTIGUOUS
   case(MPI_COMBINER_CONTIGUOUS):{
-    printType("CONTIGUOUS(count=%d,typ=", integers[0]);
-    mpix_decode_datatype(datatypes[0]);
-    printType(")");
-    break;
+    return mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[0], datatypes[0], func, usr_ptr);
   }
   #endif
   #ifdef SMPI_COMBINER_VECTOR
-  case(MPI_COMBINER_VECTOR):{
-    printType("VECTOR(count=%d,blocklength=%d,stride=%d,typ=", integers[0], integers[1], integers[2]);
-    mpix_decode_datatype(datatypes[0]);
-    printType(")");
-    break;
+  case(MPI_COMBINER_VECTOR):{ // similar to HVECTOR, excect that the stride it is given in elements
+    int stride = integers[2];
+    int size;
+    MPI_Type_size(datatypes[0], & size);
+
+    for(int i=0; i < integers[0]; i++){
+      size_t file_offset_after = *file_offset + (size_t) stride * size;
+      ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[1], datatypes[0], func, usr_ptr);
+      if (ret != 0 || *bytes_to_access == 0) return ret;
+      *file_offset = file_offset_after;
+    }
+    return 0;
   }
   #endif
   #ifdef SMPI_COMBINER_HVECTOR_INTEGER
@@ -199,12 +73,16 @@ void mpix_decode_datatype(MPI_Datatype typ){
   #ifdef SMPI_COMBINER_HVECTOR
   case(MPI_COMBINER_HVECTOR):
   #endif
-  {
-    printType("HVECTOR(count=%d,blocklength=%d,stride=%ld,typ=", integers[0], integers[1], addresses[0]);
-    mpix_decode_datatype(datatypes[0]);
-    printType(")");
+  { // similar to VECTOR, excect that the stride it is given in bytes
+    MPI_Aint stride = addresses[0];
 
-    break;
+    for(int i=0; i < integers[0]; i++){
+      size_t file_offset_after = *file_offset + stride;
+      ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[1], datatypes[0], func, usr_ptr);
+      if (ret != 0 || *bytes_to_access == 0) return ret;
+      *file_offset = file_offset_after;
+    }
+    return 0;
   }
   #ifdef SMPI_COMBINER_INDEXED
   case(MPI_COMBINER_INDEXED):{
@@ -288,26 +166,16 @@ void mpix_decode_datatype(MPI_Datatype typ){
   case(MPI_TYPE_CREATE_STRUCT):
   #endif
   {
-    printType("STRUCT(count=%d,blocklength=[", integers[0]);
-
-    for(int i=1; i <= integers[0]; i++){
-      if( i != 1) printType(",");
-      printType("%d", integers[i]);
-    }
-    printType("], displacement=[");
+    size_t displacement = 0;
+    size_t file_offset_r = *file_offset;
     for(int i=0; i < integers[0]; i++){
-      if( i != 0) printType(",");
-      printType("%ld", addresses[i]);
-    }
-    printType("],typ=[");
-    for(int i=0; i < integers[0]; i++){
-      if( i != 0) printType(",");
-      mpix_decode_datatype(datatypes[i]);
-    }
-    printType("])");
-    break;
+      *file_offset += addresses[i] - displacement;
 
-    break;
+      ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[i+1], datatypes[i], func, usr_ptr);
+      displacement = *file_offset - file_offset_r;
+      if (ret != 0 || *bytes_to_access == 0) return ret;
+    }
+    return 0;
   }
   #ifdef SMPI_TYPE_CREATE_SUBARRAY
   case(MPI_TYPE_CREATE_SUBARRAY):
@@ -416,14 +284,39 @@ void mpix_decode_datatype(MPI_Datatype typ){
   #ifdef SMPI_COMBINER_RESIZED
   case(MPI_COMBINER_RESIZED):
   #endif
-  {
-    printType("RESIZED(lb=%ld,extend=%ld,typ=", addresses[0], addresses[1]);
-    mpix_decode_datatype(datatypes[0]);
-    printType(")");
-    break;
+  { // TODO Check
+    MPI_Aint lb = addresses[0];
+    MPI_Aint ub = addresses[1];
+    MPI_Aint delta = ub - lb;
+
+    for(int i=0; i < count; i++){
+      size_t file_offset_after = *file_offset + delta;
+      ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, 1, datatypes[0], func, usr_ptr);
+      if (ret != 0 || *bytes_to_access == 0) return ret;
+      *file_offset = file_offset_after;
+    }
+    return 0;
   }
   default:{
     printf("ERROR Unsupported combiner: %d\n", combiner);
   }
   }
+  return -2;
+}
+
+size_t mpix_process_datatype(void * mem_buff, int count, MPI_Datatype mem_type, size_t file_offset,  MPI_Datatype file_type, MPI_Type_decode_func func, void * usr_ptr){
+  // check if the memory datatype is contiguous in memory
+  MPI_Aint      extent;
+  int typ_size;
+  MPI_Type_extent( mem_type, &extent);
+  MPI_Type_size( mem_type, &typ_size );
+  assert(typ_size == extent);
+
+  size_t bytes_to_process = ((size_t) typ_size)*count;
+
+  int ret = 0;
+  while(ret == 0 && bytes_to_process > 0){
+    ret = mpix_process_datatype_i((char*) mem_buff, mem_type, & file_offset, & bytes_to_process, 1, file_type, func, usr_ptr);
+  }
+  return ((size_t) typ_size)*count - bytes_to_process;
 }
