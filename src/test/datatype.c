@@ -248,7 +248,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
   case(MPI_TYPE_HINDEXED):
   #endif
   {
-    printType("TYPE_HINDEXED(count=%d,blocklength=[", integers[0]);
+    printType("HINDEXED(count=%d,blocklength=[", integers[0]);
 
     for(int i=1; i <= integers[0]; i++){
       if( i != 1) printType(",");
@@ -295,7 +295,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
   case(MPI_TYPE_CREATE_STRUCT):
   #endif
   {
-    printType("TYPE_STRUCT(count=%d,blocklength=[", integers[0]);
+    printType("STRUCT(count=%d,blocklength=[", integers[0]);
 
     for(int i=1; i <= integers[0]; i++){
       if( i != 1) printType(",");
