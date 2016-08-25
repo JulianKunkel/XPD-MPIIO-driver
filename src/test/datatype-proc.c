@@ -35,271 +35,260 @@ int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * fil
   ret = MPI_Type_get_contents(file_type, num_integers, num_addresses, num_datatypes, integers, addresses, datatypes);
   CHECK_RET(ret)
 
-  switch(combiner){
-  #ifdef SMPI_COMBINER_DUP
-  case(MPI_COMBINER_DUP):{
-    printType("DUP(typ=");
-    mpix_decode_datatype(datatypes[0]);
-    printType(")");
-    break;
-  }
-  #endif
-  #ifdef SMPI_COMBINER_CONTIGUOUS
-  case(MPI_COMBINER_CONTIGUOUS):{
-    return mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[0], datatypes[0], func, usr_ptr);
-  }
-  #endif
-  #ifdef SMPI_COMBINER_VECTOR
-  case(MPI_COMBINER_VECTOR):{ // similar to HVECTOR, excect that the stride it is given in elements
-    int stride = integers[2];
-    int size;
-    MPI_Type_size(datatypes[0], & size);
+  for(int c=0; c < count; c++){
+    switch(combiner){
+    #ifdef SMPI_COMBINER_DUP
+    case(MPI_COMBINER_DUP):{
+      return mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, count, datatypes[0], func, usr_ptr);
+    }
+    #endif
+    #ifdef SMPI_COMBINER_CONTIGUOUS
+    case(MPI_COMBINER_CONTIGUOUS):{
+      return mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[0], datatypes[0], func, usr_ptr);
+    }
+    #endif
+    #ifdef SMPI_COMBINER_VECTOR
+    case(MPI_COMBINER_VECTOR):{ // similar to HVECTOR, excect that the stride it is given in elements
+      int stride = integers[2];
+      MPI_Aint size;
+      MPI_Type_extent(datatypes[0], & size);
 
-    for(int i=0; i < integers[0]; i++){
-      size_t file_offset_after = *file_offset + (size_t) stride * size;
-      ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[1], datatypes[0], func, usr_ptr);
-      if (ret != 0 || *bytes_to_access == 0) return ret;
-      *file_offset = file_offset_after;
+      size_t file_offset_initial = *file_offset;
+      for(int i=0; i < integers[0]; i++){
+        *file_offset = file_offset_initial + (size_t) stride * size;
+        ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[1], datatypes[0], func, usr_ptr);
+        if (ret != 0 || *bytes_to_access == 0) return ret;
+      }
+      return 0;
     }
-    return 0;
-  }
-  #endif
-  #ifdef SMPI_COMBINER_HVECTOR_INTEGER
-  case(MPI_COMBINER_HVECTOR_INTEGER):
-  #endif
-  #ifdef SMPI_TYPE_CREATE_HVECTOR
-  case(MPI_TYPE_CREATE_HVECTOR):
-  #endif
-  #ifdef SMPI_COMBINER_HVECTOR
-  case(MPI_COMBINER_HVECTOR):
-  #endif
-  { // similar to VECTOR, excect that the stride it is given in bytes
-    MPI_Aint stride = addresses[0];
+    #endif
+    #ifdef SMPI_COMBINER_HVECTOR_INTEGER
+    case(MPI_COMBINER_HVECTOR_INTEGER):
+    #endif
+    #ifdef SMPI_TYPE_CREATE_HVECTOR
+    case(MPI_TYPE_CREATE_HVECTOR):
+    #endif
+    #ifdef SMPI_COMBINER_HVECTOR
+    case(MPI_COMBINER_HVECTOR):
+    #endif
+    { // similar to VECTOR, excect that the stride it is given in bytes
+      MPI_Aint stride = addresses[0];
 
-    for(int i=0; i < integers[0]; i++){
-      size_t file_offset_after = *file_offset + stride;
-      ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[1], datatypes[0], func, usr_ptr);
-      if (ret != 0 || *bytes_to_access == 0) return ret;
-      *file_offset = file_offset_after;
+      for(int i=0; i < integers[0]; i++){
+        size_t file_offset_after = *file_offset + stride;
+        ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[1], datatypes[0], func, usr_ptr);
+        if (ret != 0 || *bytes_to_access == 0) return ret;
+        *file_offset = file_offset_after;
+      }
+      return 0;
     }
-    return 0;
-  }
-  #ifdef SMPI_COMBINER_INDEXED
-  case(MPI_COMBINER_INDEXED):{
-    printType("INDEXED(count=%d,blocklength=[", integers[0]);
+    #ifdef SMPI_COMBINER_INDEXED
+    case(MPI_COMBINER_INDEXED):{
+      MPI_Aint size;
+      MPI_Type_extent(datatypes[0], & size);
+      size_t file_offset_start = *file_offset;
 
-    for(int i=1; i <= integers[0]; i++){
-      if( i != 1) printType(",");
-      printType("%d", integers[i]);
+      int count = integers[0];
+      for(int i=0; i < count; i++){
+        *file_offset = file_offset_start + integers[count + i + 1] * size;
+        int blocklength = integers[i+1];
+        ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, blocklength, datatypes[0], func, usr_ptr);
+        if (ret != 0 || *bytes_to_access == 0) return ret;
+      }
+      return 0;
     }
-    printType("], displacement=[");
-    for(int i=integers[0]; i <= 2*integers[0]; i++){
-      if( i != 1) printType(",");
-      printType("%d", integers[i]);
-    }
-    printType("],typ=");
-    mpix_decode_datatype(datatypes[0]);
-    printType(")");
-    break;
-  }
-  #endif
-  #ifdef SMPI_COMBINER_HINDEXED_INTEGER
-  case(MPI_COMBINER_HINDEXED_INTEGER):
-  #endif
-  #ifdef SMPI_TYPE_HINDEXED
-  case(MPI_TYPE_HINDEXED):
-  #endif
-  #ifdef SMPI_COMBINER_HINDEXED
-  case(MPI_COMBINER_HINDEXED):
-  #endif
-  #ifdef SMPI_TYPE_CREATE_HINDEXED
-  case(MPI_TYPE_CREATE_HINDEXED):
-  #endif
-  #ifdef SMPI_TYPE_HINDEXED
-  case(MPI_TYPE_HINDEXED):
-  #endif
-  {
-    printType("HINDEXED(count=%d,blocklength=[", integers[0]);
+    #endif
+    #ifdef SMPI_COMBINER_HINDEXED_INTEGER
+    case(MPI_COMBINER_HINDEXED_INTEGER):
+    #endif
+    #ifdef SMPI_TYPE_HINDEXED
+    case(MPI_TYPE_HINDEXED):
+    #endif
+    #ifdef SMPI_COMBINER_HINDEXED
+    case(MPI_COMBINER_HINDEXED):
+    #endif
+    #ifdef SMPI_TYPE_CREATE_HINDEXED
+    case(MPI_TYPE_CREATE_HINDEXED):
+    #endif
+    #ifdef SMPI_TYPE_HINDEXED
+    case(MPI_TYPE_HINDEXED):
+    #endif
+    {
+      size_t file_offset_start = *file_offset;
 
-    for(int i=1; i <= integers[0]; i++){
-      if( i != 1) printType(",");
-      printType("%d", integers[i]);
+      for(int i=0; i < integers[0]; i++){
+        *file_offset = file_offset_start + addresses[i];
+        int blocklength = integers[i+1];
+        // MPI_Aint displ = addresses[i]
+        ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, blocklength, datatypes[0], func, usr_ptr);
+        if (ret != 0 || *bytes_to_access == 0) return ret;
+      }
+      return 0;
     }
-    printType("], displacement=[");
-    for(int i=0; i < integers[0]; i++){
-      if( i != 0) printType(",");
-      printType("%ld", addresses[i]);
-    }
-    printType("],typ=");
-    mpix_decode_datatype(datatypes[0]);
-    printType(")");
-    break;
-  }
 
-  #ifdef SMPI_TYPE_CREATE_INDEXED_BLOCK
-  case(MPI_TYPE_CREATE_INDEXED_BLOCK):
-  #endif
-  #ifdef SMPI_COMBINER_INDEXED_BLOCK
-  case(MPI_COMBINER_INDEXED_BLOCK):
-  #endif
-  {
-    printType("INDEXED_BLOCK(count=%d,blocklength=%d,displacement=[", integers[0], integers[1]);
-    for(int i=2; i <= integers[0] + 1; i++){
-      if( i != 2) printType(",");
-      printType("%ld", addresses[i]);
+    #ifdef SMPI_TYPE_CREATE_INDEXED_BLOCK
+    case(MPI_TYPE_CREATE_INDEXED_BLOCK):
+    #endif
+    #ifdef SMPI_COMBINER_INDEXED_BLOCK
+    case(MPI_COMBINER_INDEXED_BLOCK):
+    #endif
+    {
+      printType("INDEXED_BLOCK(count=%d,blocklength=%d,displacement=[", integers[0], integers[1]);
+      for(int i=2; i <= integers[0] + 1; i++){
+        if( i != 2) printType(",");
+        printType("%ld", addresses[i]);
+      }
+      printType("],typ=");
+      mpix_decode_datatype(datatypes[0]);
+      printType(")");
+      return -1;
     }
-    printType("],typ=");
-    mpix_decode_datatype(datatypes[0]);
-    printType(")");
-    break;
-  }
-  #ifdef SMPI_COMBINER_STRUCT_INTEGER
-  case(MPI_COMBINER_STRUCT_INTEGER):
-  #endif
-  #ifdef SMPI_TYPE_STRUCT
-  case(MPI_TYPE_STRUCT):
-  #endif
-  #ifdef SMPI_COMBINER_STRUCT
-  case(MPI_COMBINER_STRUCT):
-  #endif
-  #ifdef SMPI_TYPE_CREATE_STRUCT
-  case(MPI_TYPE_CREATE_STRUCT):
-  #endif
-  {
-    size_t displacement = 0;
-    size_t file_offset_r = *file_offset;
-    for(int i=0; i < integers[0]; i++){
-      *file_offset += addresses[i] - displacement;
+    #ifdef SMPI_COMBINER_STRUCT_INTEGER
+    case(MPI_COMBINER_STRUCT_INTEGER):
+    #endif
+    #ifdef SMPI_TYPE_STRUCT
+    case(MPI_TYPE_STRUCT):
+    #endif
+    #ifdef SMPI_COMBINER_STRUCT
+    case(MPI_COMBINER_STRUCT):
+    #endif
+    #ifdef SMPI_TYPE_CREATE_STRUCT
+    case(MPI_TYPE_CREATE_STRUCT):
+    #endif
+    {
+      size_t displacement = 0;
+      size_t file_offset_r = *file_offset;
+      for(int i=0; i < integers[0]; i++){
+        *file_offset += addresses[i] - displacement;
 
-      ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[i+1], datatypes[i], func, usr_ptr);
-      displacement = *file_offset - file_offset_r;
-      if (ret != 0 || *bytes_to_access == 0) return ret;
+        ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[i+1], datatypes[i], func, usr_ptr);
+        displacement = *file_offset - file_offset_r;
+        if (ret != 0 || *bytes_to_access == 0) return ret;
+      }
+      return 0;
     }
-    return 0;
-  }
-  #ifdef SMPI_TYPE_CREATE_SUBARRAY
-  case(MPI_TYPE_CREATE_SUBARRAY):
-  #endif
-  #ifdef SMPI_COMBINER_SUBARRAY
-  case(MPI_COMBINER_SUBARRAY):
-  #endif
-  {
-    printType("SUBARRAY(ndims=%d,size=[", integers[0]);
-    for(int i=1; i <= integers[0]; i++){
-      if( i != 1) printType(",");
-      printType("%d", integers[i]);
+    #ifdef SMPI_TYPE_CREATE_SUBARRAY
+    case(MPI_TYPE_CREATE_SUBARRAY):
+    #endif
+    #ifdef SMPI_COMBINER_SUBARRAY
+    case(MPI_COMBINER_SUBARRAY):
+    #endif
+    {
+      printType("SUBARRAY(ndims=%d,size=[", integers[0]);
+      for(int i=1; i <= integers[0]; i++){
+        if( i != 1) printType(",");
+        printType("%d", integers[i]);
+      }
+      printType("],subsize=[");
+      for(int i=integers[0] + 1; i <= 2*integers[0]; i++){
+        if( i != integers[0] + 1) printType(",");
+        printType("%d", integers[i]);
+      }
+      printType("],starts=[");
+      for(int i=2*integers[0] + 1; i <= 3*integers[0]; i++){
+        if( i != 2*integers[0] + 1) printType(",");
+        printType("%d", integers[i]);
+      }
+      printType("],order=%d,typ=", integers[3*integers[0]+1]);
+      mpix_decode_datatype(datatypes[0]);
+      printType(")");
+      return -1;
     }
-    printType("],subsize=[");
-    for(int i=integers[0] + 1; i <= 2*integers[0]; i++){
-      if( i != integers[0] + 1) printType(",");
-      printType("%d", integers[i]);
+    #ifdef SMPI_COMBINER_DARRAY
+    case(MPI_COMBINER_DARRAY):
+    #endif
+    #ifdef SMPI_TYPE_CREATE_DARRAY
+    case(MPI_TYPE_CREATE_DARRAY):{
+    #endif
+    {
+      int ndims = integers[2];
+      printType("DARRAY(size=%d,rank=%d,ndims=%d,gsizes=[", integers[0], integers[1], ndims);
+      int start;
+      start = 3;
+      for(int i=start; i < ndims + start; i++){
+        if( i != start) printType(",");
+        printType("%d", integers[i]);
+      }
+      printType("],distribs=[");
+      start += ndims;
+      for(int i=start; i < ndims + start; i++){
+        if( i != start) printType(",");
+        printType("%d", integers[i]);
+      }
+      printType("],dargs=[");
+      start += ndims;
+      for(int i=start; i < ndims + start; i++){
+        if( i != start) printType(",");
+        printType("%d", integers[i]);
+      }
+      printType("],psizes=[");
+      start += ndims;
+      for(int i=start; i < ndims + start; i++){
+        if( i != start) printType(",");
+        printType("%d", integers[i]);
+      }
+      printType("],order=%d,typ=", integers[4*ndims+3]);
+      mpix_decode_datatype(datatypes[0]);
+      printType(")");
+      return -1;
     }
-    printType("],starts=[");
-    for(int i=2*integers[0] + 1; i <= 3*integers[0]; i++){
-      if( i != 2*integers[0] + 1) printType(",");
-      printType("%d", integers[i]);
+    #ifdef SMPI_COMBINER_F90_REAL
+    case(MPI_COMBINER_F90_REAL):{
+      printType("F90_REAL(p=%d,r=%d)", integers[0], integers[1]);
+      return -1;
     }
-    printType("],order=%d,typ=", integers[3*integers[0]+1]);
-    mpix_decode_datatype(datatypes[0]);
-    printType(")");
-    break;
-  }
-  #ifdef SMPI_COMBINER_DARRAY
-  case(MPI_COMBINER_DARRAY):
-  #endif
-  #ifdef SMPI_TYPE_CREATE_DARRAY
-  case(MPI_TYPE_CREATE_DARRAY):{
-  #endif
-  {
-    int ndims = integers[2];
-    printType("DARRAY(size=%d,rank=%d,ndims=%d,gsizes=[", integers[0], integers[1], ndims);
-    int start;
-    start = 3;
-    for(int i=start; i < ndims + start; i++){
-      if( i != start) printType(",");
-      printType("%d", integers[i]);
+    #endif
+    #ifdef SMPI_TYPE_CREATE_F90_REAL
+    case(MPI_TYPE_CREATE_F90_REAL):{
+      printType("F90_REAL(p=%d,r=%d)", integers[0], integers[1]);
+      return -1;
     }
-    printType("],distribs=[");
-    start += ndims;
-    for(int i=start; i < ndims + start; i++){
-      if( i != start) printType(",");
-      printType("%d", integers[i]);
+    #endif
+    #ifdef SMPI_COMBINER_F90_COMPLEX
+    case(MPI_COMBINER_F90_COMPLEX):{
+      printType("F90_COMPLEX(p=%d,r=%d)", integers[0], integers[1]);
+      return -1;
     }
-    printType("],dargs=[");
-    start += ndims;
-    for(int i=start; i < ndims + start; i++){
-      if( i != start) printType(",");
-      printType("%d", integers[i]);
+    #endif
+    #ifdef SMPI_TYPE_CREATE_F90_COMPLEX
+    case(MPI_TYPE_CREATE_F90_COMPLEX):{
+      printType("F90_COMPLEX(p=%d,r=%d)", integers[0], integers[1]);
+      return -1;
     }
-    printType("],psizes=[");
-    start += ndims;
-    for(int i=start; i < ndims + start; i++){
-      if( i != start) printType(",");
-      printType("%d", integers[i]);
+    #endif
+    #ifdef SMPI_COMBINER_F90_INTEGER
+    case(MPI_COMBINER_F90_INTEGER):{
+      printType("F90_INTEGER(r=%d)", integers[0]);
+      return -1;
     }
-    printType("],order=%d,typ=", integers[4*ndims+3]);
-    mpix_decode_datatype(datatypes[0]);
-    printType(")");
-    break;
-  }
-  #ifdef SMPI_COMBINER_F90_REAL
-  case(MPI_COMBINER_F90_REAL):{
-    printType("F90_REAL(p=%d,r=%d)", integers[0], integers[1]);
-    break;
-  }
-  #endif
-  #ifdef SMPI_TYPE_CREATE_F90_REAL
-  case(MPI_TYPE_CREATE_F90_REAL):{
-    printType("F90_REAL(p=%d,r=%d)", integers[0], integers[1]);
-    break;
-  }
-  #endif
-  #ifdef SMPI_COMBINER_F90_COMPLEX
-  case(MPI_COMBINER_F90_COMPLEX):{
-    printType("F90_COMPLEX(p=%d,r=%d)", integers[0], integers[1]);
-    break;
-  }
-  #endif
-  #ifdef SMPI_TYPE_CREATE_F90_COMPLEX
-  case(MPI_TYPE_CREATE_F90_COMPLEX):{
-    printType("F90_COMPLEX(p=%d,r=%d)", integers[0], integers[1]);
-    break;
-  }
-  #endif
-  #ifdef SMPI_COMBINER_F90_INTEGER
-  case(MPI_COMBINER_F90_INTEGER):{
-    printType("F90_INTEGER(r=%d)", integers[0]);
-    break;
-  }
-  #endif
-  #ifdef SMPI_TYPE_CREATE_F90_INTEGER
-  case(MPI_TYPE_CREATE_F90_INTEGER):{
-    printType("F90_INTEGER(r=%d)", integers[0]);
-    break;
-  }
-  #endif
-  #ifdef SMPI_TYPE_CREATE_RESIZED
-  case(MPI_TYPE_CREATE_RESIZED):
-  #endif
-  #ifdef SMPI_COMBINER_RESIZED
-  case(MPI_COMBINER_RESIZED):
-  #endif
-  { // TODO Check
-    MPI_Aint lb = addresses[0];
-    MPI_Aint ub = addresses[1];
-    MPI_Aint delta = ub - lb;
+    #endif
+    #ifdef SMPI_TYPE_CREATE_F90_INTEGER
+    case(MPI_TYPE_CREATE_F90_INTEGER):{
+      printType("F90_INTEGER(r=%d)", integers[0]);
+      return -1;
+    }
+    #endif
+    #ifdef SMPI_TYPE_CREATE_RESIZED
+    case(MPI_TYPE_CREATE_RESIZED):
+    #endif
+    #ifdef SMPI_COMBINER_RESIZED
+    case(MPI_COMBINER_RESIZED):
+    #endif
+    { // TODO Check
+      MPI_Aint lb = addresses[0];
+      MPI_Aint ub = addresses[1];
+      MPI_Aint delta = ub - lb;
 
-    for(int i=0; i < count; i++){
       size_t file_offset_after = *file_offset + delta;
       ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, 1, datatypes[0], func, usr_ptr);
       if (ret != 0 || *bytes_to_access == 0) return ret;
       *file_offset = file_offset_after;
+      return 0;
     }
-    return 0;
-  }
-  default:{
-    printf("ERROR Unsupported combiner: %d\n", combiner);
-  }
+    default:{
+      printf("ERROR Unsupported combiner: %d\n", combiner);
+    }
+    }
   }
   return -2;
 }
