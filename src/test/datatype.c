@@ -218,7 +218,6 @@ void mpix_decode_datatype(MPI_Datatype typ){
   {
     printType("HVECTOR(count=%d,blocklength=%d,stride=%ld,typ=", integers[0], integers[1], addresses[0]);
     mpix_decode_datatype(datatypes[0]);
-
     break;
   }
   #ifdef SMPI_COMBINER_INDEXED
@@ -226,12 +225,12 @@ void mpix_decode_datatype(MPI_Datatype typ){
     printType("INDEXED(count=%d,blocklength=[", integers[0]);
 
     for(int i=1; i <= integers[0]; i++){
-      if( i != 1) printType(",");
+      if( i != 1) printType(";");
       printType("%d", integers[i]);
     }
     printType("], displacement=[");
     for(int i=integers[0]+1; i <= 2*integers[0]; i++){
-      if( i != 1) printType(",");
+      if( i != 1) printType(";");
       printType("%d", integers[i]);
     }
     printType("],typ=");
@@ -258,12 +257,12 @@ void mpix_decode_datatype(MPI_Datatype typ){
     printType("HINDEXED(count=%d,blocklength=[", integers[0]);
 
     for(int i=1; i <= integers[0]; i++){
-      if( i != 1) printType(",");
+      if( i != 1) printType(";");
       printType("%d", integers[i]);
     }
-    printType("], displacement=[");
+    printType("],displacement=[");
     for(int i=0; i < integers[0]; i++){
-      if( i != 0) printType(",");
+      if( i != 0) printType(";");
       printType("%ld", addresses[i]);
     }
     printType("],typ=");
@@ -280,7 +279,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
   {
     printType("INDEXED_BLOCK(count=%d,blocklength=%d,displacement=[", integers[0], integers[1]);
     for(int i=2; i <= integers[0] + 1; i++){
-      if( i != 2) printType(",");
+      if( i != 2) printType(";");
       printType("%ld", addresses[i]);
     }
     printType("],typ=");
@@ -303,17 +302,17 @@ void mpix_decode_datatype(MPI_Datatype typ){
     printType("STRUCT(count=%d,blocklength=[", integers[0]);
 
     for(int i=1; i <= integers[0]; i++){
-      if( i != 1) printType(",");
+      if( i != 1) printType(";");
       printType("%d", integers[i]);
     }
-    printType("], displacement=[");
+    printType("],displacement=[");
     for(int i=0; i < integers[0]; i++){
-      if( i != 0) printType(",");
+      if( i != 0) printType(";");
       printType("%ld", addresses[i]);
     }
     printType("],typ=[");
     for(int i=0; i < integers[0]; i++){
-      if( i != 0) printType(",");
+      if( i != 0) printType(";");
       mpix_decode_datatype(datatypes[i]);
     }
     printType("]");
@@ -328,17 +327,17 @@ void mpix_decode_datatype(MPI_Datatype typ){
   {
     printType("SUBARRAY(ndims=%d,size=[", integers[0]);
     for(int i=1; i <= integers[0]; i++){
-      if( i != 1) printType(",");
+      if( i != 1) printType(";");
       printType("%d", integers[i]);
     }
     printType("],subsize=[");
     for(int i=integers[0] + 1; i <= 2*integers[0]; i++){
-      if( i != integers[0] + 1) printType(",");
+      if( i != integers[0] + 1) printType(";");
       printType("%d", integers[i]);
     }
     printType("],starts=[");
     for(int i=2*integers[0] + 1; i <= 3*integers[0]; i++){
-      if( i != 2*integers[0] + 1) printType(",");
+      if( i != 2*integers[0] + 1) printType(";");
       printType("%d", integers[i]);
     }
     printType("],order=%d,typ=", integers[3*integers[0]+1]);
@@ -357,25 +356,25 @@ void mpix_decode_datatype(MPI_Datatype typ){
     int start;
     start = 3;
     for(int i=start; i < ndims + start; i++){
-      if( i != start) printType(",");
+      if( i != start) printType(";");
       printType("%d", integers[i]);
     }
     printType("],distribs=[");
     start += ndims;
     for(int i=start; i < ndims + start; i++){
-      if( i != start) printType(",");
+      if( i != start) printType(";");
       printType("%d", integers[i]);
     }
     printType("],dargs=[");
     start += ndims;
     for(int i=start; i < ndims + start; i++){
-      if( i != start) printType(",");
+      if( i != start) printType(";");
       printType("%d", integers[i]);
     }
     printType("],psizes=[");
     start += ndims;
     for(int i=start; i < ndims + start; i++){
-      if( i != start) printType(",");
+      if( i != start) printType(";");
       printType("%d", integers[i]);
     }
     printType("],order=%d,typ=", integers[4*ndims+3]);
@@ -425,7 +424,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
   case(MPI_COMBINER_RESIZED):
   #endif
   {
-    printType("RESIZED(lb=%ld,extend=%ld,typ=", addresses[0], addresses[1]);
+    printType("RESIZED(lb=%ld,typ=", addresses[0]);
     mpix_decode_datatype(datatypes[0]);
     break;
   }
