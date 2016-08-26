@@ -1,0 +1,38 @@
+body{
+	margin-left: 25%;
+	margin-right: 25%;
+	min-width: 20em;
+	max-width: 50em;
+}
+div{
+		border: 4px solid black;
+		padding: 5px;
+}
+
+div.REPEAT{
+	border: none;
+}
+
+div.STRUCT {
+	background-color: lightgreen;
+}
+
+div.NAMED {
+	background-color: lightgray;
+	border: none;
+	width: 10em;
+	display: block;
+}
+
+div.CONTIGUOUS {
+	background-color: lightyellow;
+	clear: both;
+}
+
+div.RESIZED {
+	background-color: lightblue;
+}
+
+div.HVECTOR {
+	background-color: violet;
+}
