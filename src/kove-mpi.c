@@ -41,6 +41,10 @@ typedef kdsa_vol_handle_t handle;
 
 static char * debug = NULL;
 
+
+extern int kdsa_set_read_buffer_size(kdsa_vol_handle_t handle, size_t new_read_buffer_size);
+extern int kdsa_set_write_buffer_size(kdsa_vol_handle_t handle, size_t new_write_buffer_size);
+
 // internal structure for MPI_File
 typedef struct{
   handle fd;
@@ -54,7 +58,7 @@ typedef struct{
   MPI_File mpi_fh; // the original file handle
 } xpd_fh_t;
 
-int fileIsOnXPD(char const * name){
+int fileIsOnXPD(char * name){
   return strncmp(name, "xpd:", 4) == 0 || strncmp(name, "XPD:", 4) == 0;
 }
 
@@ -247,6 +251,20 @@ int MPI_File_open(MPI_Comm comm, CONST char *filename, int amode, MPI_Info info,
     //}else{
     get_file_size(f);
     //}
+
+    const char * buffer_size_str = getenv("KDSA_MPI_BUFFER_SIZE");
+
+    if(buffer_size_str != NULL){
+      size_t buffer_size = atoll(buffer_size_str);
+      if (buffer_size < 10*1024){
+        printf("MPI-XPD: Error: invalid buffer_size %zu\n", buffer_size);
+      }else{
+        ret = kdsa_set_read_buffer_size(f->fd, buffer_size);
+        assert( ret >= 0);
+        ret = kdsa_set_write_buffer_size(f->fd, buffer_size);
+        assert( ret >= 0);
+      }
+    }
 
     f->atomicity = FALSE;
     return MPI_SUCCESS;
@@ -458,6 +476,9 @@ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etype, MPI_Data
   FUNC_START
   xpd_fh_t * f = (xpd_fh_t*) fh;
   if (f->onXPD){
+    int num_integers, num_addresses, num_datatypes, combiner;
+    MPI_Type_get_envelope(filetype, & num_integers, & num_addresses, & num_datatypes, & combiner);
+
     assert(disp == 0);
     assert(etype == MPI_BYTE);
     assert(filetype == MPI_BYTE);
