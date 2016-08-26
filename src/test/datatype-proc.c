@@ -163,7 +163,7 @@ int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * fil
     {
       size_t file_offset_start = *file_offset;
       for(int i=0; i < integers[0]; i++){
-        *file_offset = file_offset_start + displacement;
+        *file_offset = file_offset_start + addresses[i];
 
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[i+1], datatypes[i], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
