@@ -49,15 +49,18 @@ int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * fil
     #endif
     #ifdef SMPI_COMBINER_VECTOR
     case(MPI_COMBINER_VECTOR):{ // similar to HVECTOR, excect that the stride it is given in elements
-      int stride = integers[2];
+      int strideElems = integers[2];
       MPI_Aint size;
       MPI_Type_extent(datatypes[0], & size);
+      size_t stride = (size_t) strideElems * size;
 
       size_t file_offset_initial = *file_offset;
-      for(int i=0; i < integers[0]; i++){
-        *file_offset = file_offset_initial + (size_t) stride * size;
+      for(int i=integers[0] - 1; i >= 0; i--){
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[1], datatypes[0], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
+        if (i != 0){
+          *file_offset = file_offset_initial + stride;
+        }
       }
       return 0;
     }
@@ -74,11 +77,13 @@ int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * fil
     { // similar to VECTOR, excect that the stride it is given in bytes
       MPI_Aint stride = addresses[0];
 
-      for(int i=0; i < integers[0]; i++){
-        size_t file_offset_after = *file_offset + stride;
+      size_t file_offset_initial = *file_offset;
+      for(int i=integers[0] - 1; i >= 0; i--){
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[1], datatypes[0], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
-        *file_offset = file_offset_after;
+        if (i != 0){
+          *file_offset = file_offset_initial + stride;
+        }
       }
       return 0;
     }
@@ -156,13 +161,11 @@ int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * fil
     case(MPI_TYPE_CREATE_STRUCT):
     #endif
     {
-      size_t displacement = 0;
-      size_t file_offset_r = *file_offset;
+      size_t file_offset_start = *file_offset;
       for(int i=0; i < integers[0]; i++){
-        *file_offset += addresses[i] - displacement;
+        *file_offset = file_offset_start + displacement;
 
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[i+1], datatypes[i], func, usr_ptr);
-        displacement = *file_offset - file_offset_r;
         if (ret != 0 || *bytes_to_access == 0) return ret;
       }
       return 0;
