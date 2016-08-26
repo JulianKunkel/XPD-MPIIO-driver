@@ -20,6 +20,8 @@
 
 #include <kdsa.h>
 
+#include "datatype.h"
+
 //#define DEBUG
 
 #define XPD_FLAGS (KDSA_FLAGS_HANDLE_IO_NOSPIN|KDSA_FLAGS_HANDLE_USE_EVENT)
@@ -53,6 +55,10 @@ typedef struct{
   int atomicity;
   MPI_Comm comm;
   char * filename;
+
+  MPI_Datatype etype;
+  MPI_Datatype ftype;
+  size_t ftype_displacement;
 
   int onXPD; // is the file stored on the XPD
   MPI_File mpi_fh; // the original file handle
@@ -115,23 +121,37 @@ static inline int pack_data(MPI_Datatype datatype, int count, xpd_fh_t * f, uint
   ret = MPI_Type_get_extent(datatype, &lb, & extent);
   assert(ret == MPI_SUCCESS);
 
+  *length_out = length;
+
   if (lb != 0 || size != extent){ // datatype is not contiguous
     int position = 0;
-    printf("Packing Data! %lld %lld %lld\n", (long long) lb, (long long) extent, (long long) size);
-
+    // printf("Packing Data! %lld %lld %lld\n", (long long) lb, (long long) extent, (long long) size);
     void * outbuf = malloc(length);
     ret = MPI_Pack(*tmp_buf, count, datatype, outbuf, length, & position, f->comm);
-    assert(ret);
+    assert(ret == MPI_SUCCESS);
+    *tmp_buf = outbuf;
+    return 1;
   }
 
-  assert(ret == MPI_SUCCESS);
-
-  *length_out = length;
   return 0;
+}
+
+static size_t writer_noncontig_func(xpd_fh_t * f, size_t size, char * buff, size_t file_pos){
+  size_t ret = kdsa_write_unregistered(f->fd, file_pos, buff, size);
+  debug1("non-contig write offset: %zu size: %zu\n", file_pos, size);
+
+  if (f->file_size < file_pos + size){
+    f->file_size = file_pos + size - HEADER_SIZE;
+  }
+
+  return ret == 0 ? size : 0;
 }
 
 int MPI_File_write_at(MPI_File fh, MPI_Offset offset, CONST void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
   FUNC_START
+  if (count == 0){
+    return MPI_SUCCESS;
+  }
   xpd_fh_t * f = (xpd_fh_t*) fh;
   if (f->onXPD){
     int ret = 0;
@@ -140,33 +160,42 @@ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, CONST void *buf, int count
     void * tmp_buf = (void*) buf;
     int allocated_buffer = pack_data(datatype, count, f, & length, & tmp_buf);
 
-    ret = kdsa_write_unregistered(f->fd, (HEADER_SIZE + offset), tmp_buf, length);
+    offset = offset + f->ftype_displacement;
+
+    debug1("write offset: %lld count: %lld int count: %d\n", (long long) offset, (long long) length, count);
+
+    if (f->ftype != MPI_BYTE){
+      if (debug) mpix_decode_datatype(f->ftype);
+      ret = mpix_process_datatype(buf, length, MPI_BYTE, offset, f->ftype, & writer_noncontig_func, f) != length;
+    }else{ // contiguous in file
+      ret = kdsa_write_unregistered(f->fd, offset, tmp_buf, length);
+
+      if(debug != NULL){
+        void * buffer = malloc(length);
+        ret = kdsa_read_unregistered(f->fd, offset, buffer, length);
+        assert( ret == 0 );
+        ret = memcmp(buffer, tmp_buf, length);
+        if (ret != 0){
+          printf("ERROR write_at differs\n");
+          exit(1);
+        }
+
+        hexDump(buffer, length);
+
+        free(buffer);
+      }
+
+      if (f->file_size < offset + length){
+        f->file_size = offset + length;
+      }
+    }
     if (ret != 0){
       if (allocated_buffer) free(tmp_buf);
       return MPI_ERR_BUFFER;
     }
 
-    if(debug != NULL){
-      printf("write offset: %lld count: %lld\n", (long long) offset, (long long) length);
-      void * buffer = malloc(length);
-      ret = kdsa_read_unregistered(f->fd, (HEADER_SIZE + offset), buffer, length);
-      assert( ret == 0 );
-      ret = memcmp(buffer, tmp_buf, length);
-      if (ret != 0){
-        printf("ERROR write_at differs\n");
-        exit(1);
-      }
-
-      hexDump(buffer, length);
-
-      free(buffer);
-    }
-
     MPI_Status_set_elements(status, datatype, count);
-
-    if (f->file_size < offset + length){
-      f->file_size = offset + length;
-    }
+    MPI_Status_set_elements_x(status, datatype, length);
 
     if (allocated_buffer) free(tmp_buf);
     return MPI_SUCCESS;
@@ -174,9 +203,23 @@ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, CONST void *buf, int count
   return PMPI_File_write_at(f->mpi_fh, offset, buf, count, datatype, status);
 }
 
+static size_t reader_noncontig_func(xpd_fh_t * f, size_t size, char * buff, size_t file_pos){
+  debug1("non-contig read offset: %zu size: %zu\n", file_pos, size);
+  int ret;
+
+  if (f->file_size < file_pos + size){
+    return 0;
+  }
+
+  ret = kdsa_read_unregistered(f->fd, file_pos, buff, size);
+  return size;
+}
 
 int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){
   FUNC_START
+  if (count == 0){
+    return MPI_SUCCESS;
+  }
   xpd_fh_t * f = (xpd_fh_t*) fh;
   if (f->onXPD){
     int ret = 0;
@@ -200,13 +243,20 @@ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_D
     if ((length + offset) > f->file_size){
       if (offset >= f->file_size){
         MPI_Status_set_elements(status, datatype, 0);
+
         return MPI_SUCCESS;
       }
       length = f->file_size - offset;
     }
 
-    ret = kdsa_read_unregistered(f->fd, (HEADER_SIZE + offset), buf, length);
+    offset = offset + f->ftype_displacement;
 
+    if (f->ftype != MPI_BYTE){
+      if (debug) mpix_decode_datatype(f->ftype);
+      ret = mpix_process_datatype(buf, length, MPI_BYTE, offset, f->ftype, & reader_noncontig_func, f->fd) != length;
+    }else{
+      ret = kdsa_read_unregistered(f->fd, offset, buf, length);
+    }
     debug1("read offset: %lld count: %lld ret: %d\n", (long long) offset, (long long) length, ret);
     if(debug != NULL){
       hexDump(buf, length);
@@ -218,6 +268,7 @@ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_D
       return MPI_SUCCESS;
     }
     MPI_Status_set_elements(status, datatype, count);
+    MPI_Status_set_elements_x(status, datatype, length);
 
     return MPI_SUCCESS;
   }
@@ -234,8 +285,16 @@ int MPI_File_open(MPI_Comm comm, CONST char *filename, int amode, MPI_Info info,
 
   if (f->onXPD){
     debug = getenv("MPI_XPD_DEBUG");
+    if (debug != NULL && strcmp(debug, "SPIN") == 0){
+      printf("WAITING, connect with the debugger, set spin to 0\n");
+      volatile int spin=1;
+      while(spin == 1) sleep(1);
+    }
     f->offset = 0;
     f->filename = strdup(filename);
+    f->etype = MPI_BYTE;
+    f->ftype = MPI_BYTE;
+    f->ftype_displacement = HEADER_SIZE;
 
     int status = kdsa_connect(((char*) filename)+4, XPD_FLAGS, & f->fd);
     if(status < 0)
@@ -368,6 +427,22 @@ int MPI_File_read_at_all(MPI_File fh, MPI_Offset offset, void *buf, int count, M
 int MPI_File_delete(CONST char *filename, MPI_Info info){
   FUNC_START
   if(fileIsOnXPD(filename)){
+    handle fd;
+    // set the file size to 0
+    int status = kdsa_connect(((char*) filename)+4, XPD_FLAGS, & fd);
+    if(status < 0){
+      printf("Failed to connect to XPD: %s (%d)\n", strerror(errno), errno);
+      exit(-1);
+    }
+    size_t size = 0;
+    status = kdsa_write_unregistered(fd, 0, & size, sizeof(size_t));
+
+    status = kdsa_disconnect(fd);
+    if(status < 0){
+    	printf("Failed to disconnect\n");
+    	exit(-1);
+    }
+
     return MPI_SUCCESS;
   }
 
@@ -476,12 +551,9 @@ int MPI_File_set_view(MPI_File fh, MPI_Offset disp, MPI_Datatype etype, MPI_Data
   FUNC_START
   xpd_fh_t * f = (xpd_fh_t*) fh;
   if (f->onXPD){
-    int num_integers, num_addresses, num_datatypes, combiner;
-    MPI_Type_get_envelope(filetype, & num_integers, & num_addresses, & num_datatypes, & combiner);
-
-    assert(disp == 0);
-    assert(etype == MPI_BYTE);
-    assert(filetype == MPI_BYTE);
+    f->etype = etype;
+    f->ftype = filetype;
+    f->ftype_displacement = disp + HEADER_SIZE;
     return MPI_SUCCESS;
   }
   return PMPI_File_set_view(f->mpi_fh, disp, etype, filetype, datarep, info);

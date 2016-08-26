@@ -5,28 +5,41 @@
 #include "datatype.h"
 
 // count == number of repeats for the file type
-int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * file_offset, size_t * bytes_to_access, int count, MPI_Datatype file_type, MPI_Type_decode_func func, void * usr_ptr){
-  printf("X offs: %zu toAcc: %zu\n", *file_offset, *bytes_to_access);
-
-  size_t processed;
+static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size_t * file_offset, size_t * bytes_to_access, int count, MPI_Datatype file_type, MPI_Type_decode_func func, void * usr_ptr){
   int ret;
   int num_integers, num_addresses, num_datatypes, combiner;
+
+  int typ_size = 0;
+  MPI_Type_size(file_type, & typ_size);
+  if(typ_size == 0) return 0;
+
+  MPI_Count typ_lb, typ_extent;
+
+  ret = MPI_Type_get_extent_x(file_type, & typ_lb, & typ_extent );
+  assert(ret == MPI_SUCCESS);
+
+  size_t processed;
+
+  // check if we can access a contiguous chunk of data now:
+  //ret = MPI_Type_get_envelope(file_type, & num_integers, & num_addresses, & num_datatypes, & combiner);
+  mpix_decode_datatype(file_type);
+  printf("XX %d %zu %zu bytes_to_access: %zu\n", typ_size, (size_t)  typ_extent, (size_t) typ_lb, *bytes_to_access);
+  if( typ_size == typ_extent){
+    // one call only
+    //if(combiner == MPI_COMBINER_NAMED){
+    size_t bytes = ((size_t) typ_size)*count;
+    if (*bytes_to_access < bytes) bytes = *bytes_to_access;
+    processed = func(usr_ptr, bytes, *mem_buff, *file_offset + typ_lb);
+    *file_offset += processed + typ_lb;
+    *mem_buff += processed;
+    *bytes_to_access -= processed;
+    return processed != bytes;
+  }
   ret = MPI_Type_get_envelope(file_type, & num_integers, & num_addresses, & num_datatypes, & combiner);
   CHECK_RET(ret)
   debug("%d %d %d %d", num_integers, num_addresses, num_datatypes, combiner);
 
-  if( combiner == MPI_COMBINER_NAMED ){
-    int typ_size = 0;
-    MPI_Type_size(file_type, & typ_size);
-    if(typ_size == 0) return 0;
-
-    size_t bytes = ((size_t) typ_size)*count;
-    if (*bytes_to_access < bytes) bytes = *bytes_to_access;
-    processed = func(usr_ptr, bytes, mem_buff, *file_offset);
-    *file_offset += processed;
-    *bytes_to_access -= processed;
-    return processed != bytes;
-  }
+  assert(combiner != MPI_COMBINER_NAMED);
 
   int integers[num_integers];
   MPI_Aint addresses[num_addresses];
@@ -44,20 +57,19 @@ int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * fil
     #endif
     #ifdef SMPI_COMBINER_CONTIGUOUS
     case(MPI_COMBINER_CONTIGUOUS):{
-      return mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[0], datatypes[0], func, usr_ptr);
+      return mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[0]*count, datatypes[0], func, usr_ptr);
     }
     #endif
     #ifdef SMPI_COMBINER_VECTOR
     case(MPI_COMBINER_VECTOR):{ // similar to HVECTOR, excect that the stride it is given in elements
       int strideElems = integers[2];
-      MPI_Aint size;
-      MPI_Type_extent(datatypes[0], & size);
-      size_t stride = (size_t) strideElems * size;
-
+      size_t stride = (size_t) strideElems * typ_extent;
       size_t file_offset_initial = *file_offset;
+
       for(int i=integers[0] - 1; i >= 0; i--){
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[1], datatypes[0], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
+        *mem_buff += ret;
         if (i != 0){
           *file_offset = file_offset_initial + stride;
         }
@@ -81,6 +93,7 @@ int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * fil
       for(int i=integers[0] - 1; i >= 0; i--){
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[1], datatypes[0], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
+        *mem_buff += ret;
         if (i != 0){
           *file_offset = file_offset_initial + stride;
         }
@@ -89,16 +102,15 @@ int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * fil
     }
     #ifdef SMPI_COMBINER_INDEXED
     case(MPI_COMBINER_INDEXED):{
-      MPI_Aint size;
-      MPI_Type_extent(datatypes[0], & size);
       size_t file_offset_start = *file_offset;
 
       int count = integers[0];
       for(int i=0; i < count; i++){
-        *file_offset = file_offset_start + integers[count + i + 1] * size;
+        *file_offset = file_offset_start + integers[count + i + 1] * typ_extent;
         int blocklength = integers[i+1];
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, blocklength, datatypes[0], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
+        *mem_buff += ret;
       }
       return 0;
     }
@@ -127,6 +139,7 @@ int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * fil
         // MPI_Aint displ = addresses[i]
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, blocklength, datatypes[0], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
+        *mem_buff += ret;
       }
       return 0;
     }
@@ -167,6 +180,7 @@ int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * fil
 
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[i+1], datatypes[i], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
+        *mem_buff += ret;
       }
       return 0;
     }
@@ -286,6 +300,7 @@ int mpix_process_datatype_i(void * mem_buff, MPI_Datatype mem_type, size_t * fil
       ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, 1, datatypes[0], func, usr_ptr);
       if (ret != 0 || *bytes_to_access == 0) return ret;
       *file_offset = file_offset_after;
+      *mem_buff += ret;
       return 0;
     }
     default:{
@@ -308,7 +323,7 @@ size_t mpix_process_datatype(void * mem_buff, int count, MPI_Datatype mem_type, 
 
   int ret = 0;
   while(ret == 0 && bytes_to_process > 0){
-    ret = mpix_process_datatype_i((char*) mem_buff, mem_type, & file_offset, & bytes_to_process, 1, file_type, func, usr_ptr);
+    ret = mpix_process_datatype_i((char**) & mem_buff, mem_type, & file_offset, & bytes_to_process, 1, file_type, func, usr_ptr);
   }
   return ((size_t) typ_size)*count - bytes_to_process;
 }
