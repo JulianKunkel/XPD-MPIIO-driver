@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <mpi.h>
 #include <assert.h>
+#include <unistd.h>
+
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -44,8 +46,8 @@ typedef kdsa_vol_handle_t handle;
 static char * debug = NULL;
 
 
-extern int kdsa_set_read_buffer_size(kdsa_vol_handle_t handle, size_t new_read_buffer_size);
-extern int kdsa_set_write_buffer_size(kdsa_vol_handle_t handle, size_t new_write_buffer_size);
+extern int kdsa_set_read_buffer_size(handle, size_t);
+extern int kdsa_set_write_buffer_size(handle, size_t);
 
 // internal structure for MPI_File
 typedef struct{
@@ -64,11 +66,11 @@ typedef struct{
   MPI_File mpi_fh; // the original file handle
 } xpd_fh_t;
 
-int fileIsOnXPD(char * name){
+int fileIsOnXPD(const char * name){
   return strncmp(name, "xpd:", 4) == 0 || strncmp(name, "XPD:", 4) == 0;
 }
 
-static void hexDump(unsigned char * dest, size_t out_size){
+static void hexDump(unsigned const char * dest, size_t out_size){
   size_t i;
 	for (i=0; i < out_size ; i++){
 		printf("%.2x ", dest[i]);
@@ -171,7 +173,7 @@ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, CONST void *buf, int count
 
     if (f->ftype != MPI_BYTE){
       if (debug) mpix_decode_datatype(f->ftype);
-      ret = mpix_process_datatype(buf, length, MPI_BYTE, offset, f->ftype, & writer_noncontig_func, f) != length;
+      ret = mpix_process_datatype((void*) buf, length, MPI_BYTE, offset, f->ftype, & writer_noncontig_func, f) != length;
     }else{ // contiguous in file
       ret = kdsa_write_unregistered(f->fd, offset, tmp_buf, length);
 
