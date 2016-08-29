@@ -12,6 +12,7 @@ rm testfile  test.nc testfile-orig || echo ""
 LD_PRELOAD=./libmpi-xpd-shmio-dummy.so /home/julian/Dokumente/DKRZ/wr-git/bull-io/netcdf-benchmark/src/benchtool -d 2:10:10:10  -c 1:5:5:5 -t ind -f xpd:testfile
 
 export MPI_XPD_DEBUG=x
+unset MPI_XPD_DEBUG
 CALL="mpiexec -np 4 /home/julian/Dokumente/DKRZ/wr-git/bull-io/netcdf-benchmark/src/benchtool -d=4:4:4:4 -n=2 -p=2 -c=1:1:1:1 -t=coll -f="
 # CALL="mpiexec -np 4 /home/julian/Dokumente/DKRZ/wr-git/bull-io/netcdf-benchmark/src/benchtool -d=4:4:4:4 -n=2 -p=2 -c=1:1:1:1 -t=ind -f="
 # CALL="mpiexec -np 4 /home/julian/Dokumente/DKRZ/wr-git/bull-io/netcdf-benchmark/src/benchtool -d=4:10:10:10 -n=2 -p=2 -c=1:5:5:5 -t=ind -f="

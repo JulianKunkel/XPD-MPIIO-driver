@@ -164,9 +164,6 @@ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, CONST void *buf, int count
     uint64_t length;
     void * tmp_buf = (void*) buf;
     int allocated_buffer = pack_data(datatype, count, f, & length, & tmp_buf);
-    printf("HD: WA: ");
-    hexDump(tmp_buf, length);
-
     offset = offset + f->ftype_displacement;
 
     debug1("write offset: %lld count: %lld int count: %d\n", (long long) offset, (long long) length, count);

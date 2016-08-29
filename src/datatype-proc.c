@@ -4,6 +4,8 @@
 
 #include "datatype.h"
 
+#define DEBUG 0
+
 // count == number of repeats for the file type
 static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size_t * file_offset, size_t * bytes_to_access, int count, MPI_Datatype file_type, MPI_Type_decode_func func, void * usr_ptr){
   int ret;
@@ -22,8 +24,10 @@ static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size
 
   // check if we can access a contiguous chunk of data now:
   //ret = MPI_Type_get_envelope(file_type, & num_integers, & num_addresses, & num_datatypes, & combiner);
-  mpix_decode_datatype(file_type);
-  printf("XX %d %zu %zu bytes_to_access: %zu\n", typ_size, (size_t)  typ_extent, (size_t) typ_lb, *bytes_to_access);
+  if(DEBUG){
+    mpix_decode_datatype(file_type);
+    printf("PROCESS: %d %zu %zu bytes_to_access: %zu\n", typ_size, (size_t)  typ_extent, (size_t) typ_lb, *bytes_to_access);
+  }
   if( typ_size == typ_extent){
     // one call only
     //if(combiner == MPI_COMBINER_NAMED){
