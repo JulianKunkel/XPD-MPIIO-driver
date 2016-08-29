@@ -54,6 +54,7 @@ typedef struct{
   handle fd;
   MPI_Offset offset;
   MPI_Offset file_size;
+  MPI_Offset initial_file_size;
   int atomicity;
   MPI_Comm comm;
   char * filename;
@@ -93,6 +94,7 @@ static void get_file_size(xpd_fh_t * f){
   }
   ret = MPI_Bcast(& f->file_size, 1, MPI_UINT64_T, 0, f->comm);
   assert(ret == MPI_SUCCESS);
+  f->initial_file_size = f->file_size;
 }
 
 static inline void flush_file_size(xpd_fh_t * f){
@@ -102,7 +104,7 @@ static inline void flush_file_size(xpd_fh_t * f){
   int rank;
   ret = MPI_Comm_rank(f->comm, & rank);
   assert(ret == MPI_SUCCESS);
-  if (rank == 0){
+  if (rank == 0 && f->initial_file_size != f->file_size){
     int ret;
     // it would be possible to pre-register the file_size pointer...
     ret = kdsa_write_unregistered(f->fd, 0, & f->file_size, sizeof(uint64_t));
