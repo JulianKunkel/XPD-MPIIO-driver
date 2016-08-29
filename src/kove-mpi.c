@@ -68,10 +68,10 @@ int fileIsOnXPD(char * name){
   return strncmp(name, "xpd:", 4) == 0 || strncmp(name, "XPD:", 4) == 0;
 }
 
-static void hexDump(char * dest, size_t out_size){
+static void hexDump(unsigned char * dest, size_t out_size){
   size_t i;
 	for (i=0; i < out_size ; i++){
-		printf("%x", dest[i]);
+		printf("%.2x ", dest[i]);
 	}
 	printf("\n");
 }
@@ -139,6 +139,9 @@ static inline int pack_data(MPI_Datatype datatype, int count, xpd_fh_t * f, uint
 static size_t writer_noncontig_func(xpd_fh_t * f, size_t size, char * buff, size_t file_pos){
   size_t ret = kdsa_write_unregistered(f->fd, file_pos, buff, size);
   debug1("non-contig write offset: %zu size: %zu\n", file_pos, size);
+  if (debug){
+    hexDump(buff, size);
+  }
 
   if (f->file_size < file_pos + size){
     f->file_size = file_pos + size - HEADER_SIZE;
@@ -159,6 +162,8 @@ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, CONST void *buf, int count
     uint64_t length;
     void * tmp_buf = (void*) buf;
     int allocated_buffer = pack_data(datatype, count, f, & length, & tmp_buf);
+    printf("HD: WA: ");
+    hexDump(tmp_buf, length);
 
     offset = offset + f->ftype_displacement;
 
