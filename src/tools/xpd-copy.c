@@ -74,6 +74,7 @@ int main(int argc, char ** argv){
     }
     ret = MPI_File_read_at(fr, processed, buff, transfer_size, MPI_BYTE, & status);
     assert(ret == MPI_SUCCESS);
+    printf("%zu \n", transfer_size);
     ret = MPI_File_write_at(fw, processed, buff, transfer_size, MPI_BYTE, & status);
     assert(ret == MPI_SUCCESS);
   }

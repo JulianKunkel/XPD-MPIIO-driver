@@ -259,7 +259,7 @@ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_D
 
     if (f->ftype != MPI_BYTE){
       if (debug) mpix_decode_datatype(f->ftype);
-      ret = mpix_process_datatype(buf, length, MPI_BYTE, offset, f->ftype, & reader_noncontig_func, f->fd) != length;
+      ret = mpix_process_datatype(buf, length, MPI_BYTE, offset, f->ftype, & reader_noncontig_func, f) != length;
     }else{
       ret = kdsa_read_unregistered(f->fd, offset, buf, length);
     }

@@ -16,6 +16,7 @@ unset MPI_XPD_DEBUG
 # CALL="mpiexec -np 4 /home/julian/Dokumente/DKRZ/wr-git/bull-io/netcdf-benchmark/src/benchtool-int -d=4:4:4:4 -n=2 -p=2 -c=1:1:1:1 -t=ind -w -r --verify -f="
 CALL="mpiexec -np 4 /home/julian/Dokumente/DKRZ/wr-git/bull-io/netcdf-benchmark/src/benchtool-int -d=4:10:10:10 -n=2 -p=2 -c=1:5:5:5 -t=ind -w -r --verify -f="
 CALL="mpiexec -np 2 /home/julian/Dokumente/DKRZ/wr-git/bull-io/netcdf-benchmark/src/benchtool-int -n=2 -p=1 -c=auto  -d=1:10:10:10 -t=ind -w -r --verify -f="
+CALL="/home/julian/Dokumente/DKRZ/wr-git/bull-io/netcdf-benchmark/src/benchtool-int -n=1 -p=1 -d=1:1:1:1  -t=coll -w -r --verify -f="
 
 ${CALL}testfile-orig
 LD_PRELOAD=./libmpi-xpd-shmio-dummy.so ${CALL}xpd:testfile
