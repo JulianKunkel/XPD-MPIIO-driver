@@ -147,7 +147,7 @@ static size_t writer_noncontig_func(xpd_fh_t * f, size_t size, char * buff, size
     hexDump(buff, size);
   }
 
-  if (f->file_size < file_pos + size){
+  if (f->file_size < file_pos + size - HEADER_SIZE){
     f->file_size = file_pos + size - HEADER_SIZE;
   }
 
@@ -191,8 +191,8 @@ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, CONST void *buf, int count
         free(buffer);
       }
 
-      if (f->file_size < offset + length){
-        f->file_size = offset + length;
+      if (f->file_size < offset + length - HEADER_SIZE){
+        f->file_size = offset + length - HEADER_SIZE;
       }
     }
     if (ret != 0){
