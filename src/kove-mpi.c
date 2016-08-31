@@ -142,7 +142,7 @@ static inline int pack_data(MPI_Datatype datatype, int count, xpd_fh_t * f, uint
 
 static size_t writer_noncontig_func(xpd_fh_t * f, size_t size, char * buff, size_t file_pos){
   size_t ret = kdsa_write_unregistered(f->fd, file_pos, buff, size);
-  debug1("non-contig write offset: %zu size: %zu\n", file_pos, size);
+  debug1("non-contig write offset: %zu size: %zu\n", file_pos - HEADER_SIZE, size);
   if (debug){
     hexDump(buff, size);
   }
@@ -168,7 +168,7 @@ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, CONST void *buf, int count
     int allocated_buffer = pack_data(datatype, count, f, & length, & tmp_buf);
     offset = offset + f->ftype_displacement;
 
-    debug1("write offset: %lld count: %lld int count: %d\n", (long long) offset, (long long) length, count);
+    debug1("MPI write offset: %lld count: %lld int count: %d\n", (long long) offset  - HEADER_SIZE, (long long) length, count);
 
     if (f->ftype != MPI_BYTE){
       if (debug) mpix_decode_datatype(f->ftype);
@@ -263,7 +263,7 @@ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_D
     }else{
       ret = kdsa_read_unregistered(f->fd, offset, buf, length);
     }
-    debug1("read offset: %lld count: %lld ret: %d\n", (long long) offset, (long long) length, ret);
+    debug1("MPI read offset: %lld count: %lld ret: %d\n", (long long) offset - HEADER_SIZE, (long long) length, ret);
     if(debug != NULL){
       hexDump(buf, length);
     }
