@@ -172,7 +172,7 @@ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, CONST void *buf, int count
 
     if (f->ftype != MPI_BYTE){
       if (debug) mpix_decode_datatype(f->ftype);
-      ret = mpix_process_datatype((void*) buf, length, MPI_BYTE, offset, f->ftype, & writer_noncontig_func, f) != length;
+      ret = mpix_process_datatype((void*) tmp_buf, length, MPI_BYTE, offset, f->ftype, & writer_noncontig_func, f) != length;
     }else{ // contiguous in file
       ret = kdsa_write_unregistered(f->fd, offset, tmp_buf, length);
 
