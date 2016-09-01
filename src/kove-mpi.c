@@ -131,7 +131,7 @@ static inline int pack_data(MPI_Datatype datatype, int count, xpd_fh_t * f, uint
 static size_t writer_noncontig_func(xpd_fh_t * f, size_t size, char * buff, size_t file_pos){
   size_t ret = kdsa_write_unregistered(f->fd, file_pos, buff, size);
   debug("non-contig write offset: %zu size: %zu\n", file_pos - HEADER_SIZE, size);
-  hexDump(buff, size);
+  hexDump((unsigned char*) buff, size);
 
   if (f->file_size < file_pos + size - HEADER_SIZE){
     f->file_size = file_pos + size - HEADER_SIZE;
@@ -204,7 +204,7 @@ static size_t reader_noncontig_func(xpd_fh_t * f, size_t size, char * buff, size
   }
 
   ret = kdsa_read_unregistered(f->fd, file_pos, buff, size);
-  return size;
+  return ret == 0 ? size : 0;
 }
 
 int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_Datatype datatype, MPI_Status *status){

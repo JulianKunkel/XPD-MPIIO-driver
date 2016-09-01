@@ -18,8 +18,8 @@ libmpi-xpd.so: kove-mpi.c Makefile  datatype.c datatype-proc.c datatypes-support
 mpi-xpd-copy.exe: tools/xpd-copy.c libmpi-xpd.so Makefile
 	${CC} tools/xpd-copy.c -o mpi-xpd-copy.exe  -l mpi-xpd  ${CFLAGS} ${LDFLAGS}
 
-mpi-xpd-format.exe: tools/mpi-xpd-format.c Makefile
-	${CC} tools/mpi-xpd-format.c -o mpi-xpd-format.exe  ${CFLAGS} ${LDFLAGS}
+mpi-xpd-format.exe: tools/xpd-format.c Makefile
+	${CC} tools/xpd-format.c -o mpi-xpd-format.exe  ${CFLAGS} ${LDFLAGS}
 
 
 dummy: libkdsa-dummy.so libmpi-xpd-dummy.so mpi-xpd-format-dummy.exe mpi-xpd-copy-dummy.exe Makefile
@@ -33,8 +33,8 @@ libmpi-xpd-dummy.so: kove-mpi.c libkdsa-dummy.so Makefile  datatype.c datatype-p
 mpi-xpd-copy-dummy.exe: tools/xpd-copy.c libmpi-xpd-dummy.so Makefile
 	${CC} tools/xpd-copy.c -o mpi-xpd-copy-dummy.exe  -l mpi-xpd-dummy  ${CFLAGS} ${LDFLAGS_DUMMY}
 
-mpi-xpd-format-dummy.exe: tools/mpi-xpd-format.c libkdsa-dummy.so Makefile
-	${CC} tools/mpi-xpd-format.c -o mpi-xpd-format-dummy.exe  ${CFLAGS} ${LDFLAGS_DUMMY}
+mpi-xpd-format-dummy.exe: tools/xpd-format.c libkdsa-dummy.so Makefile
+	${CC} tools/xpd-format.c -o mpi-xpd-format-dummy.exe  ${CFLAGS} ${LDFLAGS_DUMMY}
 
 datatypes-supported.txt: check-available-combiner.sh
 	./check-available-combiner.sh > datatypes-supported.txt
