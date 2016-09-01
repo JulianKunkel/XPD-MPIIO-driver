@@ -61,6 +61,7 @@ int main(int argc, char ** argv){
   MPI_File fr, fw;
   ret = MPI_File_open(MPI_COMM_WORLD, source, MPI_MODE_RDONLY, MPI_INFO_NULL, & fr);
   assert(ret == MPI_SUCCESS);
+  MPI_File_delete(target, MPI_INFO_NULL);
   ret = MPI_File_open(MPI_COMM_WORLD, target, MPI_MODE_WRONLY|MPI_MODE_CREATE, MPI_INFO_NULL, & fw);
   assert(ret == MPI_SUCCESS);
 
