@@ -23,12 +23,9 @@ static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size
 
   size_t processed;
 
-  // check if we can access a contiguous chunk of data now:
-  //ret = MPI_Type_get_envelope(file_type, & num_integers, & num_addresses, & num_datatypes, & combiner);
   if(xpdDebugLevel > 0){
-    debug("PROCESS: %d %zu %zu bytes_to_access: %zu\n", typ_size, (size_t)  typ_extent, (size_t) typ_lb, *bytes_to_access);
+    debug("proc count: %d offset:%zu size:%d extent:%zu lb:%zu bytes_to_access: %zu\n", count, *file_offset, typ_size, (size_t)  typ_extent, (size_t) typ_lb, *bytes_to_access);
     mpix_decode_datatype(file_type);
-    debug("\n");
   }
   if( typ_size == typ_extent){
     // one call only
@@ -37,6 +34,7 @@ static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size
     if (*bytes_to_access < bytes) bytes = *bytes_to_access;
     processed = func(usr_ptr, bytes, *mem_buff, *file_offset + typ_lb);
     *file_offset += processed + typ_lb;
+    debug("typ_size == typ_extend, offset: %zu\n", *file_offset);
     *mem_buff += processed;
     *bytes_to_access -= processed;
     return processed != bytes;
@@ -69,18 +67,20 @@ static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size
     #ifdef SMPI_COMBINER_VECTOR
     case(MPI_COMBINER_VECTOR):{ // similar to HVECTOR, excect that the stride it is given in elements
       int strideElems = integers[2];
+      int blocklength = integers[1];
       size_t stride = (size_t) strideElems * typ_extent;
       size_t file_offset_initial = *file_offset;
 
       for(int i=integers[0] - 1; i >= 0; i--){
-        ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[1], datatypes[0], func, usr_ptr);
+        ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, blocklength, datatypes[0], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
         *mem_buff += ret;
         if (i != 0){
           *file_offset = file_offset_initial + stride;
+          debug("vector offset: %zu\n", *file_offset);
         }
       }
-      return 0;
+      break;
     }
     #endif
     #ifdef SMPI_COMBINER_HVECTOR_INTEGER
@@ -102,9 +102,10 @@ static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size
         *mem_buff += ret;
         if (i != 0){
           *file_offset = file_offset_initial + stride;
+          debug("hvector offset: %zu\n", *file_offset);
         }
       }
-      return 0;
+      break;
     }
     #ifdef SMPI_COMBINER_INDEXED
     case(MPI_COMBINER_INDEXED):{
@@ -113,12 +114,14 @@ static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size
       int count = integers[0];
       for(int i=0; i < count; i++){
         *file_offset = file_offset_start + integers[count + i + 1] * typ_extent;
+        debug("indexed offset: %zu\n", *file_offset);
+
         int blocklength = integers[i+1];
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, blocklength, datatypes[0], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
         *mem_buff += ret;
       }
-      return 0;
+      break;
     }
     #endif
     #ifdef SMPI_COMBINER_HINDEXED_INTEGER
@@ -141,13 +144,14 @@ static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size
 
       for(int i=0; i < integers[0]; i++){
         *file_offset = file_offset_start + addresses[i];
+        debug("indexed offset: %zu\n", *file_offset);
         int blocklength = integers[i+1];
         // MPI_Aint displ = addresses[i]
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, blocklength, datatypes[0], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
         *mem_buff += ret;
       }
-      return 0;
+      break;
     }
 
     #ifdef SMPI_TYPE_CREATE_INDEXED_BLOCK
@@ -183,12 +187,12 @@ static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size
       size_t file_offset_start = *file_offset;
       for(int i=0; i < integers[0]; i++){
         *file_offset = file_offset_start + addresses[i];
-
+        debug("struct offset: %zu\n", *file_offset);
         ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, integers[i+1], datatypes[i], func, usr_ptr);
         if (ret != 0 || *bytes_to_access == 0) return ret;
         *mem_buff += ret;
       }
-      return 0;
+      break;
     }
     #ifdef SMPI_TYPE_CREATE_SUBARRAY
     case(MPI_TYPE_CREATE_SUBARRAY):
@@ -215,7 +219,7 @@ static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size
       printType("],order=%d,typ=", integers[3*integers[0]+1]);
       mpix_decode_datatype(datatypes[0]);
       printType(")");
-      return -1;
+      break;
     }
     #ifdef SMPI_COMBINER_DARRAY
     case(MPI_COMBINER_DARRAY):
@@ -306,8 +310,9 @@ static int mpix_process_datatype_i(char ** mem_buff, MPI_Datatype mem_type, size
       ret = mpix_process_datatype_i(mem_buff, mem_type, file_offset, bytes_to_access, 1, datatypes[0], func, usr_ptr);
       if (ret != 0 || *bytes_to_access == 0) return ret;
       *file_offset = file_offset_after;
+      debug("resized offset: %zu\n", *file_offset);
       *mem_buff += ret;
-      return 0;
+      break;
     }
     default:{
       printf("ERROR Unsupported combiner: %d\n", combiner);

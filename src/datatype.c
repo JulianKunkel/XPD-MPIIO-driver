@@ -159,7 +159,7 @@ static void printSizeExt(MPI_Datatype typ){
   printType(",size=%d,extent=%zu)", size, (size_t) extent);
 }
 
-void mpix_decode_datatype(MPI_Datatype typ){
+static void mpix_decode_datatype_i(MPI_Datatype typ){
   int ret;
   int num_integers, num_addresses, num_datatypes, combiner;
   ret = MPI_Type_get_envelope(typ, & num_integers, & num_addresses, & num_datatypes, & combiner);
@@ -188,21 +188,21 @@ void mpix_decode_datatype(MPI_Datatype typ){
   #ifdef SMPI_COMBINER_DUP
   case(MPI_COMBINER_DUP):{
     printType("DUP(typ=");
-    mpix_decode_datatype(datatypes[0]);
+    mpix_decode_datatype_i(datatypes[0]);
     break;
   }
   #endif
   #ifdef SMPI_COMBINER_CONTIGUOUS
   case(MPI_COMBINER_CONTIGUOUS):{
     printType("CONTIGUOUS(count=%d,typ=", integers[0]);
-    mpix_decode_datatype(datatypes[0]);
+    mpix_decode_datatype_i(datatypes[0]);
     break;
   }
   #endif
   #ifdef SMPI_COMBINER_VECTOR
   case(MPI_COMBINER_VECTOR):{
     printType("VECTOR(count=%d,blocklength=%d,stride=%d,typ=", integers[0], integers[1], integers[2]);
-    mpix_decode_datatype(datatypes[0]);
+    mpix_decode_datatype_i(datatypes[0]);
     break;
   }
   #endif
@@ -217,7 +217,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
   #endif
   {
     printType("HVECTOR(count=%d,blocklength=%d,stride=%ld,typ=", integers[0], integers[1], addresses[0]);
-    mpix_decode_datatype(datatypes[0]);
+    mpix_decode_datatype_i(datatypes[0]);
     break;
   }
   #ifdef SMPI_COMBINER_INDEXED
@@ -234,7 +234,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
       printType("%d", integers[i]);
     }
     printType("],typ=");
-    mpix_decode_datatype(datatypes[0]);
+    mpix_decode_datatype_i(datatypes[0]);
     break;
   }
   #endif
@@ -266,7 +266,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
       printType("%ld", addresses[i]);
     }
     printType("],typ=");
-    mpix_decode_datatype(datatypes[0]);
+    mpix_decode_datatype_i(datatypes[0]);
     break;
   }
 
@@ -283,7 +283,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
       printType("%ld", addresses[i]);
     }
     printType("],typ=");
-    mpix_decode_datatype(datatypes[0]);
+    mpix_decode_datatype_i(datatypes[0]);
     break;
   }
   #ifdef SMPI_COMBINER_STRUCT_INTEGER
@@ -313,7 +313,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
     printType("],typ=[");
     for(int i=0; i < integers[0]; i++){
       if( i != 0) printType(";");
-      mpix_decode_datatype(datatypes[i]);
+      mpix_decode_datatype_i(datatypes[i]);
     }
     printType("]");
     break;
@@ -341,7 +341,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
       printType("%d", integers[i]);
     }
     printType("],order=%d,typ=", integers[3*integers[0]+1]);
-    mpix_decode_datatype(datatypes[0]);
+    mpix_decode_datatype_i(datatypes[0]);
     break;
   }
   #ifdef SMPI_COMBINER_DARRAY
@@ -378,7 +378,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
       printType("%d", integers[i]);
     }
     printType("],order=%d,typ=", integers[4*ndims+3]);
-    mpix_decode_datatype(datatypes[0]);
+    mpix_decode_datatype_i(datatypes[0]);
     break;
   }
   #ifdef SMPI_COMBINER_F90_REAL
@@ -425,7 +425,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
   #endif
   {
     printType("RESIZED(lb=%ld,typ=", addresses[0]);
-    mpix_decode_datatype(datatypes[0]);
+    mpix_decode_datatype_i(datatypes[0]);
     break;
   }
   default:{
@@ -433,4 +433,9 @@ void mpix_decode_datatype(MPI_Datatype typ){
   }
   }
   printSizeExt(typ);
+}
+
+void mpix_decode_datatype(MPI_Datatype typ){
+  mpix_decode_datatype_i(typ);
+  printf("\n");
 }
