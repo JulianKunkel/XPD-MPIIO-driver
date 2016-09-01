@@ -164,7 +164,7 @@ void mpix_decode_datatype(MPI_Datatype typ){
   int num_integers, num_addresses, num_datatypes, combiner;
   ret = MPI_Type_get_envelope(typ, & num_integers, & num_addresses, & num_datatypes, & combiner);
   CHECK_RET(ret)
-  debug("%d %d %d %d", num_integers, num_addresses, num_datatypes, combiner);
+  //debug("%d %d %d %d", num_integers, num_addresses, num_datatypes, combiner);
 
   if( combiner == MPI_COMBINER_NAMED ){
     mpix_decode_primitive(typ);
@@ -177,12 +177,12 @@ void mpix_decode_datatype(MPI_Datatype typ){
 
   ret = MPI_Type_get_contents(typ, num_integers, num_addresses, num_datatypes, integers, addresses, datatypes);
   CHECK_RET(ret)
-  for(int i=0; i < num_integers; i++){
-    debug("Count: %d", integers[i]);
-  }
-  for(int i=0; i < num_addresses; i++){
-    debug("Address: %zu", (size_t) addresses[i]);
-  }
+  // for(int i=0; i < num_integers; i++){
+  //   debug("Count: %d", integers[i]);
+  // }
+  // for(int i=0; i < num_addresses; i++){
+  //   debug("Address: %zu", (size_t) addresses[i]);
+  // }
 
   switch(combiner){
   #ifdef SMPI_COMBINER_DUP

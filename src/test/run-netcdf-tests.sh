@@ -4,7 +4,7 @@ NC_BENCH=/local/wr-git/bull-io/netcdf-benchmark/src/
 FILE_XPD=/dev/shm/testfile
 DUMMY=-dummy
 FILE_LOCAL=testfile.nc
-DEBUG="" # could be dump to dump the files
+DEBUG="dump" # could be dump to dump the files
 
 # export MPI_XPD_DEBUG=x
 # export MPI_XPD_DEBUG=SPIN

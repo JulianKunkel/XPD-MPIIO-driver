@@ -23,28 +23,14 @@
 #include <kdsa.h>
 
 #include "datatype.h"
-
-//#define DEBUG
+#include "debug.h"
 
 #define XPD_FLAGS (KDSA_FLAGS_HANDLE_IO_NOSPIN|KDSA_FLAGS_HANDLE_USE_EVENT)
 //KDSA_FLAGS_HANDLE_UNSAFE_WRITE
 
-#ifdef DEBUG
-  #define debug(...) printf("[XPD] "__VA_ARGS__);
-#else
-  #define debug(...)
-#endif
-
-#define debug1(...) { if(debug != NULL) printf("[XPD] "__VA_ARGS__); }
-
-#define FUNC_START debug("CALL %s\n", __PRETTY_FUNCTION__);
-
 typedef kdsa_vol_handle_t handle;
 
 #define HEADER_SIZE sizeof(uint64_t)
-
-static char * debug = NULL;
-
 
 extern int kdsa_set_read_buffer_size(handle, size_t);
 extern int kdsa_set_write_buffer_size(handle, size_t);
@@ -72,11 +58,13 @@ int fileIsOnXPD(const char * name){
 }
 
 static void hexDump(unsigned const char * dest, size_t out_size){
-  size_t i;
-	for (i=0; i < out_size ; i++){
-		printf("%.2x ", dest[i]);
-	}
-	printf("\n");
+  if (xpdDebugLevel > 4){
+    size_t i;
+  	for (i=0; i < out_size ; i++){
+  		printf("%.2x ", dest[i]);
+  	}
+  	printf("\n");
+  }
 }
 
 
@@ -90,7 +78,7 @@ static void get_file_size(xpd_fh_t * f){
     ret = kdsa_read_unregistered(f->fd, 0, & f->file_size, sizeof(uint64_t));
     assert(ret == 0);
 
-    debug1("reading file \"%s\" size:%lld\n", f->filename, (long long) f->file_size);
+    debug("reading file \"%s\" size:%lld\n", f->filename, (long long) f->file_size);
   }
   ret = MPI_Bcast(& f->file_size, 1, MPI_UINT64_T, 0, f->comm);
   assert(ret == MPI_SUCCESS);
@@ -110,7 +98,7 @@ static inline void flush_file_size(xpd_fh_t * f){
     ret = kdsa_write_unregistered(f->fd, 0, & f->file_size, sizeof(uint64_t));
     assert(ret == 0);
 
-    debug1("flushing file size %lld\n", (long long) f->file_size);
+    debug("flushing file size %lld\n", (long long) f->file_size);
   }
 }
 
@@ -142,10 +130,8 @@ static inline int pack_data(MPI_Datatype datatype, int count, xpd_fh_t * f, uint
 
 static size_t writer_noncontig_func(xpd_fh_t * f, size_t size, char * buff, size_t file_pos){
   size_t ret = kdsa_write_unregistered(f->fd, file_pos, buff, size);
-  debug1("non-contig write offset: %zu size: %zu\n", file_pos - HEADER_SIZE, size);
-  if (debug){
-    hexDump(buff, size);
-  }
+  debug("non-contig write offset: %zu size: %zu\n", file_pos - HEADER_SIZE, size);
+  hexDump(buff, size);
 
   if (f->file_size < file_pos + size - HEADER_SIZE){
     f->file_size = file_pos + size - HEADER_SIZE;
@@ -168,15 +154,15 @@ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, CONST void *buf, int count
     int allocated_buffer = pack_data(datatype, count, f, & length, & tmp_buf);
     offset = offset + f->ftype_displacement;
 
-    debug1("MPI write offset: %lld count: %lld int count: %d\n", (long long) offset  - HEADER_SIZE, (long long) length, count);
+    debug("MPI write offset: %lld count: %lld int count: %d\n", (long long) offset  - HEADER_SIZE, (long long) length, count);
 
     if (f->ftype != MPI_BYTE){
-      if (debug) mpix_decode_datatype(f->ftype);
+      if (xpdDebugLevel) mpix_decode_datatype(f->ftype);
       ret = mpix_process_datatype((void*) tmp_buf, length, MPI_BYTE, offset, f->ftype, & writer_noncontig_func, f) != length;
     }else{ // contiguous in file
       ret = kdsa_write_unregistered(f->fd, offset, tmp_buf, length);
 
-      if(debug != NULL){
+      if(xpdDebugLevel > 4){
         void * buffer = malloc(length);
         ret = kdsa_read_unregistered(f->fd, offset, buffer, length);
         assert( ret == 0 );
@@ -210,7 +196,7 @@ int MPI_File_write_at(MPI_File fh, MPI_Offset offset, CONST void *buf, int count
 }
 
 static size_t reader_noncontig_func(xpd_fh_t * f, size_t size, char * buff, size_t file_pos){
-  debug1("non-contig read offset: %zu size: %zu\n", file_pos, size);
+  debug("non-contig read offset: %zu size: %zu\n", file_pos, size);
   int ret;
 
   if (f->file_size < file_pos + size){
@@ -258,15 +244,13 @@ int MPI_File_read_at(MPI_File fh, MPI_Offset offset, void *buf, int count, MPI_D
     offset = offset + f->ftype_displacement;
 
     if (f->ftype != MPI_BYTE){
-      if (debug) mpix_decode_datatype(f->ftype);
+      if (xpdDebugLevel) mpix_decode_datatype(f->ftype);
       ret = mpix_process_datatype(buf, length, MPI_BYTE, offset, f->ftype, & reader_noncontig_func, f) != length;
     }else{
       ret = kdsa_read_unregistered(f->fd, offset, buf, length);
     }
-    debug1("MPI read offset: %lld count: %lld ret: %d\n", (long long) offset - HEADER_SIZE, (long long) length, ret);
-    if(debug != NULL){
-      hexDump(buf, length);
-    }
+    debug("MPI read offset: %lld count: %lld ret: %d\n", (long long) offset - HEADER_SIZE, (long long) length, ret);
+    hexDump(buf, length);
 
     if (ret != 0){ // TODO proper error handling
       MPI_Status_set_elements(status, datatype, 0);
@@ -290,12 +274,27 @@ int MPI_File_open(MPI_Comm comm, CONST char *filename, int amode, MPI_Info info,
   debug("File on XPD: %d\n", f->onXPD);
 
   if (f->onXPD){
-    debug = getenv("MPI_XPD_DEBUG");
-    if (debug != NULL && strcmp(debug, "SPIN") == 0){
+    char * xpdDebugString = getenv("MPI_XPD_DEBUG");
+    if (xpdDebugString != NULL){
+      xpdDebugLevel = atoi(xpdDebugString);
+      char * debug_rank_str = getenv("MPI_XPD_DEBUG_RANK");
+      if (debug_rank_str != NULL){
+        int rank = -1;
+        int debug_rank = -1;
+        MPI_Comm_rank(MPI_COMM_WORLD, & rank);
+        debug_rank = atoi(debug_rank_str);
+        if (rank != debug_rank){
+          xpdDebugLevel = 0;
+        }
+      }
+    }
+    xpdDebugString = getenv("MPI_XPD_DEBUG_SPIN");
+    if (xpdDebugString != NULL){
       printf("WAITING, connect with the debugger, set spin to 0\n");
       volatile int spin=1;
       while(spin == 1) sleep(1);
     }
+
     f->offset = 0;
     f->filename = strdup(filename);
     f->etype = MPI_BYTE;
