@@ -6,6 +6,9 @@ DUMMY=-dummy
 FILE_LOCAL=testfile.nc
 DEBUG="" # could be dump to dump the files
 
+# export MPI_XPD_DEBUG=x
+# export MPI_XPD_DEBUG=SPIN
+
 echo "This script tests various configurations of the netcdf-benchmark and compares the results"
 
 function run(){
@@ -13,17 +16,20 @@ function run(){
   TYP="${2}"
   CALL="${3} ${NC_BENCH}${4}"
   echo -n "$TEST "
-  ${CALL}${FILE_LOCAL} > $TEST-orig.out 2>&1
+
+  echo "${CALL}xpd:${FILE_XPD}" > $TEST-orig.out
+  ${CALL}${FILE_LOCAL} >> $TEST-orig.out 2>&1
 
   if [[ "$?" != 0 ]] ; then
-    return $?
+    return 1
   fi
 
   ./mpi-xpd-format${DUMMY}.exe ${FILE_XPD} > /dev/null
-  LD_PRELOAD=./libmpi-xpd${DUMMY}.so ${CALL}xpd:${FILE_XPD}  > $TEST-xpd.out 2>&1
+  echo "./libmpi-xpd${DUMMY}.so ${CALL}xpd:${FILE_XPD}" > $TEST-xpd.out
+  LD_PRELOAD=./libmpi-xpd${DUMMY}.so ${CALL}xpd:${FILE_XPD}  >> $TEST-xpd.out 2>&1
 
   if [[ "$?" != 0 ]] ; then
-    return $?
+    return 1
   fi
 
   if [[ "$TYP" == "r" ]] ; then
@@ -64,7 +70,7 @@ function runMultiple(){
 
   for COLL in "ind" "coll" ; do
 
-  for ACCESS in "r" "w" ; do
+  for ACCESS in "w" "r" ; do
 
   if [[ "$ACCESS" == "r" ]]; then
     V="--verify"
@@ -72,7 +78,7 @@ function runMultiple(){
     V=""
   fi
 
-  run "$n-$p-$COLL-$ACCESS" "$ACCESS" "$mpi" "benchtool-$DATATYPE -n=$n -p=$p -d=$size $extra  -t=$COLL -$ACCESS $V -f="
+  run "$DATATYPE-$n-$p-$COLL-$ACCESS$extra" "$ACCESS" "$mpi" "benchtool-$DATATYPE -n=$n -p=$p -d=$size $extra  -t=$COLL -$ACCESS $V -f="
   if [[ $? != 0 ]] ; then
     echo "ERR"
     ERROR=1
