@@ -17,15 +17,17 @@ function run(){
   CALL="${3} ${NC_BENCH}${4}"
   echo -n "$TEST "
 
-  echo "${CALL}xpd:${FILE_XPD}" > $TEST-orig.out
+  echo "${CALL}${FILE_LOCAL}" > $TEST-orig.out
   ${CALL}${FILE_LOCAL} >> $TEST-orig.out 2>&1
 
   if [[ "$?" != 0 ]] ; then
     return 1
   fi
 
-  ./mpi-xpd-format${DUMMY}.exe ${FILE_XPD} > /dev/null
-  echo "./libmpi-xpd${DUMMY}.so ${CALL}xpd:${FILE_XPD}" > $TEST-xpd.out
+  if [[ "$TYP" == "w" ]] ; then
+    ./mpi-xpd-format${DUMMY}.exe ${FILE_XPD} > /dev/null
+  fi
+  echo "LD_PRELOAD=./libmpi-xpd${DUMMY}.so ${CALL}xpd:${FILE_XPD}" > $TEST-xpd.out
   LD_PRELOAD=./libmpi-xpd${DUMMY}.so ${CALL}xpd:${FILE_XPD}  >> $TEST-xpd.out 2>&1
 
   if [[ "$?" != 0 ]] ; then
@@ -74,14 +76,19 @@ function runMultiple(){
 
   if [[ "$ACCESS" == "r" ]]; then
     V="--verify"
+    if [[ "$SKIP" == "1" ]] ; then
+      continue
+    fi
   else
     V=""
   fi
+  SKIP=0
 
   run "$DATATYPE-$n-$p-$COLL-$ACCESS$extra" "$ACCESS" "$mpi" "benchtool-$DATATYPE -n=$n -p=$p -d=$size $extra  -t=$COLL -$ACCESS $V -f="
   if [[ $? != 0 ]] ; then
     echo "ERR"
     ERROR=1
+    SKIP=1
   else
     echo "OK"
   fi
