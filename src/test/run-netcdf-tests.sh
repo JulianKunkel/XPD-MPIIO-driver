@@ -1,6 +1,6 @@
 #!/bin/bash
 
-NC_BENCH=/local/wr-git/bull-io/netcdf-benchmark/src/
+NC_BENCH=/home/julian/Dokumente/DKRZ/wr-git/bull-io/netcdf-benchmark/src/
 FILE_XPD=/dev/shm/testfile
 DUMMY=-dummy
 FILE_LOCAL=testfile.nc
@@ -60,7 +60,7 @@ function run(){
 }
 
 
-function runMultiple(){
+function runMultiple1(){
   n=$1
   p=$2
   mpi=$3
@@ -99,6 +99,51 @@ function runMultiple(){
   return $ERROR
 }
 
+
+function runMultiple2(){
+  n=$1
+  p=$2
+  mpi=$3
+  size=$4
+  extra=$5
+  ERROR=0
+
+  for DATATYPE in "int" "double" "byte" ; do
+
+  COLL="coll"
+
+  for ACCESS in "w" "r" ; do
+
+  if [[ "$ACCESS" == "r" ]]; then
+    V="--verify"
+    if [[ "$SKIP" == "1" ]] ; then
+      continue
+    fi
+  else
+    V=""
+  fi
+  SKIP=0
+
+  run "$DATATYPE-$n-$p-$COLL-$ACCESS$extra-u" "$ACCESS" "$mpi" "benchtool-$DATATYPE -n=$n -p=$p -d=$size -u $extra  -t=$COLL -$ACCESS $V -f="
+  if [[ $? != 0 ]] ; then
+    echo "ERR"
+    ERROR=1
+    SKIP=1
+  else
+    echo "OK"
+  fi
+
+  done
+  done
+  return $ERROR
+}
+
+function runMultiple(){
+	runMultiple1 "$1" "$2" "$3" "$4" "$5" "$6" "$7"
+	runMultiple2 "$1" "$2" "$3" "$4" "$5" "$6" "$7"
+}
+
+
 runMultiple 1 1 "" 1:1:1:1 ""
 if [[ $? != 0 ]] ; then
   exit 1
@@ -116,7 +161,20 @@ if [[ $? != 0 ]] ; then
   exit 1
 fi
 
+runMultiple 2 1 "mpiexec -np 2" 1:10:10:10 "-c=auto"
+runMultiple 1 2 "mpiexec -np 2" 1:10:10:10 "-c=auto"
+runMultiple 5 2 "mpiexec -np 10" 1:10:10:10 "-c=auto"
+runMultiple 2 5 "mpiexec -np 10" 1:10:10:10 "-c=auto"
+if [[ $? != 0 ]] ; then
+  exit 1
+fi
+
+
 runMultiple 2 1 "mpiexec -np 2" 10:100:100:100 ""
 runMultiple 1 2 "mpiexec -np 2" 10:100:100:100 ""
 runMultiple 5 2 "mpiexec -np 10" 10:100:100:100 ""
 runMultiple 2 5 "mpiexec -np 10" 10:100:100:100 ""
+runMultiple 2 1 "mpiexec -np 2" 10:100:100:100 "-c=auto"
+runMultiple 1 2 "mpiexec -np 2" 10:100:100:100 "-c=auto"
+runMultiple 5 2 "mpiexec -np 10" 10:100:100:100 "-c=auto"
+runMultiple 2 5 "mpiexec -np 10" 10:100:100:100 "-c=auto"
