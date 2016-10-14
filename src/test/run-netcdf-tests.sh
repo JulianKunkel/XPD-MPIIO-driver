@@ -144,19 +144,19 @@ function runMultiple(){
 }
 
 
-runMultiple 1 1 "" 1:1:1:1 ""
+runMultiple1 1 1 "" 1:1:1:1 ""
 if [[ $? != 0 ]] ; then
   exit 1
 fi
-runMultiple 1 1 "" 2:2:2:2 "-c=auto"
+runMultiple1 1 1 "" 2:2:2:2 "-c=auto"
 if [[ $? != 0 ]] ; then
   exit 1
 fi
 
-runMultiple 2 1 "mpiexec -np 2" 1:10:10:10 ""
-runMultiple 1 2 "mpiexec -np 2" 1:10:10:10 ""
-runMultiple 5 2 "mpiexec -np 10" 1:10:10:10 ""
-runMultiple 2 5 "mpiexec -np 10" 1:10:10:10 ""
+runMultiple1 2 1 "mpiexec -np 2" 1:10:10:10 ""
+runMultiple1 1 2 "mpiexec -np 2" 1:10:10:10 ""
+runMultiple1 5 2 "mpiexec -np 10" 1:10:10:10 ""
+runMultiple1 2 5 "mpiexec -np 10" 1:10:10:10 ""
 if [[ $? != 0 ]] ; then
   exit 1
 fi
@@ -169,11 +169,27 @@ if [[ $? != 0 ]] ; then
   exit 1
 fi
 
+runMultiple 2 1 "mpiexec -np 2" 1:10:10:10 "-c=1:5:10:10"
+runMultiple 1 2 "mpiexec -np 2" 1:10:10:10 "-c=1:10:5:10"
+runMultiple 5 2 "mpiexec -np 10" 1:10:10:10 "-c=1:2:5:10"
+runMultiple 2 5 "mpiexec -np 10" 1:10:10:10 "-c=1:5:2:10"
+if [[ $? != 0 ]] ; then
+  exit 1
+fi
 
-runMultiple 2 1 "mpiexec -np 2" 10:100:100:100 ""
-runMultiple 1 2 "mpiexec -np 2" 10:100:100:100 ""
-runMultiple 5 2 "mpiexec -np 10" 10:100:100:100 ""
-runMultiple 2 5 "mpiexec -np 10" 10:100:100:100 ""
+echo
+echo "Large file set"
+
+runMultiple1 2 1 "mpiexec -np 2" 10:100:100:100 ""
+runMultiple1 1 2 "mpiexec -np 2" 10:100:100:100 ""
+runMultiple1 5 2 "mpiexec -np 10" 10:100:100:100 ""
+runMultiple1 2 5 "mpiexec -np 10" 10:100:100:100 ""
+
+runMultiple1 2 1 "mpiexec -np 2" 10:100:100:100 "-c=1:50:100:100"
+runMultiple1 1 2 "mpiexec -np 2" 10:100:100:100 "-c=1:100:50:100"
+runMultiple1 5 2 "mpiexec -np 10" 10:100:100:100 "-c=1:20:50:100"
+runMultiple1 2 5 "mpiexec -np 10" 10:100:100:100 "-c=1:50:20:100"
+
 runMultiple 2 1 "mpiexec -np 2" 10:100:100:100 "-c=auto"
 runMultiple 1 2 "mpiexec -np 2" 10:100:100:100 "-c=auto"
 runMultiple 5 2 "mpiexec -np 10" 10:100:100:100 "-c=auto"
